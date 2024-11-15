@@ -68,13 +68,13 @@ fun VideoPlayer(
         IconButton(
             onClick = {
                 exoPlayer.pause() // 暂停播放
-                onPlaybackStateChanged(false) // 通知主界面停止播放
-                onBackClicked() // 触发返回逻辑
+                onPlaybackStateChanged(false) // 更新播放状态为非播放
+                onBackClicked() // 清空 URI，退出视频界面
             },
             modifier = Modifier
-                .align(Alignment.TopStart) // 对齐到左上角
-                .padding(16.dp) // 添加内边距
-                .zIndex(1f) // 设置按钮在最上层
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .zIndex(1f) // 确保按钮在顶部
         ) {
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
         }
@@ -94,3 +94,4 @@ fun VideoPlayer(
         )
     }
 }
+

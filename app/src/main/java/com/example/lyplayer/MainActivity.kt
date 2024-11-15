@@ -35,16 +35,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             LYPlayerTheme {
-                var isPlaying by remember { mutableStateOf(false) } // 控制是否全屏的状态
+                var isPlaying by remember { mutableStateOf(false) }
+
+                // 根据 `videoUri` 控制界面内容和组件显示
+                val showTopBar = videoUri == null
+                val showFab = videoUri == null
 
                 Scaffold(
-                    topBar = {
-                        if (!isPlaying) { // 如果不是播放状态，则显示顶部栏
-                            CustomTopBar()
-                        }
-                    },
                     floatingActionButton = {
-                        if (!isPlaying) { // 如果不是播放状态，则显示悬浮按钮
+                        if (videoUri == null) {
                             FloatingActionButton(
                                 onClick = { selectFileLauncher.launch(arrayOf("video/*")) },
                                 modifier = Modifier.padding(16.dp)
@@ -56,18 +55,28 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
                         if (videoUri != null) {
-                            // 播放视频并监听播放状态
+                            // 视频播放界面
                             VideoPlayer(
                                 videoUri = videoUri!!,
-                                modifier = Modifier.fillMaxSize(), // 视频全屏显示
-                                onBackClicked = { videoUri = null }, // 返回主界面
+                                modifier = Modifier.fillMaxSize(),
+                                onBackClicked = { videoUri = null }, // 清空 URI
                                 onPlaybackStateChanged = { isPlaying = it } // 更新播放状态
                             )
+                        } else {
+                            // 主界面预览
+                            VideoPlayerPreview()
                         }
                     }
                 }
             }
         }
     }
-}
 
+    override fun onBackPressed() {
+        if (videoUri != null) {
+            videoUri = null // 清空视频 URI
+        } else {
+            super.onBackPressed() // 执行默认的返回逻辑
+        }
+    }
+}
