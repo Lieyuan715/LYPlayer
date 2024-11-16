@@ -1,21 +1,23 @@
 package com.example.lyplayer
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.lyplayer.ui.theme.LYPlayerTheme
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 
+
+//主界面
 class MainActivity : ComponentActivity() {
 
     private var videoUri: Uri? by mutableStateOf(null) // 存储选中的视频 URI
@@ -23,13 +25,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 注册文件选择器的启动器
         val selectFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             if (uri != null) {
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 videoUri = uri
-            } else {
-                Toast.makeText(this, "未选择文件", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -37,9 +36,18 @@ class MainActivity : ComponentActivity() {
             LYPlayerTheme {
                 var isPlaying by remember { mutableStateOf(false) }
 
-                // 根据 `videoUri` 控制界面内容和组件显示
-                val showTopBar = videoUri == null
-                val showFab = videoUri == null
+                // 动态检测屏幕方向并调整布局
+                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+                val isLandscape = videoUri != null
+
+                // 设置屏幕方向
+                LaunchedEffect(isLandscape) {
+                    requestedOrientation = if (isLandscape) {
+                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE // 锁定横屏
+                    } else {
+                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT // 锁定竖屏
+                    }
+                }
 
                 Scaffold(
                     floatingActionButton = {
@@ -59,11 +67,11 @@ class MainActivity : ComponentActivity() {
                             VideoPlayer(
                                 videoUri = videoUri!!,
                                 modifier = Modifier.fillMaxSize(),
-                                onBackClicked = { videoUri = null }, // 清空 URI
-                                onPlaybackStateChanged = { isPlaying = it } // 更新播放状态
+                                onBackClicked = { videoUri = null },
+                                onPlaybackStateChanged = { isPlaying = it }
                             )
                         } else {
-                            // 主界面预览
+                            // 主界面
                             VideoPlayerPreview()
                         }
                     }
@@ -80,3 +88,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

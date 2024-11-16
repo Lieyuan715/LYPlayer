@@ -1,30 +1,27 @@
 package com.example.lyplayer
 
 import android.net.Uri
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import android.os.Build
+import android.view.View
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.ui.StyledPlayerView
+import kotlinx.coroutines.launch
+import android.app.Activity
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import androidx.compose.foundation.background
 
-/**
- * VideoPlayer 组件，用于显示视频播放界面并提供返回按钮。
- * @param videoUri 视频文件的 URI，用于加载视频内容
- * @param modifier 用于自定义外部布局修饰
- * @param onBackClicked 点击返回按钮时的回调函数
- * @param onPlaybackStateChanged 播放状态变化的回调函数，参数为是否正在播放
- */
 @Composable
 fun VideoPlayer(
     videoUri: Uri,
@@ -32,66 +29,132 @@ fun VideoPlayer(
     onBackClicked: () -> Unit,
     onPlaybackStateChanged: (Boolean) -> Unit
 ) {
-    // 获取当前上下文
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     // 创建 ExoPlayer 实例
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            // 加载视频媒体项
-            setMediaItem(MediaItem.fromUri(videoUri))
-            prepare() // 准备播放器
-            playWhenReady = true // 自动开始播放
-        }
-    }
+    val exoPlayer = remember { ExoPlayer.Builder(context).build() }
 
-    // DisposableEffect 确保组件销毁时释放资源
-    DisposableEffect(key1 = videoUri) {
+    // 控制条显示状态
+    var controlsVisible by remember { mutableStateOf(true) }
+
+    // 进度状态
+    var progress by remember { mutableFloatStateOf(0f) }
+
+    // 自动隐藏协程
+    val coroutineScope = rememberCoroutineScope()
+
+    // 每次 videoUri 更新时重新加载媒体
+    DisposableEffect(videoUri) {
+        exoPlayer.setMediaItem(MediaItem.fromUri(videoUri))
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                // 根据播放器状态触发回调
                 onPlaybackStateChanged(playbackState == Player.STATE_READY && exoPlayer.playWhenReady)
             }
         }
-        // 注册监听器
         exoPlayer.addListener(listener)
 
         onDispose {
-            exoPlayer.removeListener(listener) // 移除监听器
-            exoPlayer.release() // 释放资源
+            exoPlayer.removeListener(listener)
+            exoPlayer.release()
         }
     }
 
-    // 布局内容
-    Box(modifier = modifier) {
-        // 返回按钮，位于左上角
-        IconButton(
-            onClick = {
-                exoPlayer.pause() // 暂停播放
-                onPlaybackStateChanged(false) // 更新播放状态为非播放
-                onBackClicked() // 清空 URI，退出视频界面
-            },
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .zIndex(1f) // 确保按钮在顶部
-        ) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    // 定时更新播放进度
+    LaunchedEffect(exoPlayer) {
+        while (true) {
+            progress = if (exoPlayer.duration > 0) {
+                exoPlayer.currentPosition.toFloat() / exoPlayer.duration.toFloat()
+            } else {
+                0f
+            }
+            kotlinx.coroutines.delay(500) // 每 500 毫秒更新一次进度
         }
+    }
 
-        // 视频播放器，嵌入到 Compose 中
+    // 控制条自动隐藏逻辑
+    fun showControls() {
+        controlsVisible = true
+        coroutineScope.launch {
+            kotlinx.coroutines.delay(5000) // 5秒后隐藏
+            controlsVisible = false
+        }
+    }
+
+    // 永久隐藏状态栏和导航栏，设置为更快的动画
+    fun hideSystemBars(view: View) {
+        val activity = view.context as? Activity ?: return
+        val window = activity.window
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android 11 及以上使用 WindowInsetsController
+            window.insetsController?.let {
+                it.hide(WindowInsets.Type.systemBars()) // 直接隐藏状态栏和导航栏
+                // 设置为更快的行为以减少渐变效果的时间
+                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            // Android 10 及以下使用系统 UI flags
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_FULLSCREEN or
+                            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+                            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY // 直接隐藏状态栏和导航栏
+                    )
+        }
+    }
+
+    // 获取当前视图并更新状态栏显示状态
+    val contextView = LocalView.current
+    LaunchedEffect(true) {
+        hideSystemBars(contextView)  // 立即隐藏
+    }
+
+    // 布局
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .clickable {
+                // 切换控制条显示状态
+                controlsVisible = !controlsVisible
+                if (controlsVisible) {
+                    showControls()
+                }
+            }
+    ) {
+        // 视频播放器
         AndroidView(
-            factory = {
-                StyledPlayerView(it).apply {
-                    player = exoPlayer // 绑定播放器
-                    layoutParams = android.view.ViewGroup.LayoutParams(
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                        android.view.ViewGroup.LayoutParams.MATCH_PARENT
-                    ) // 全屏显示
+            factory = { context ->
+                StyledPlayerView(context).apply {
+                    player = exoPlayer
+                    setUseController(false)
                 }
             },
-            modifier = modifier.zIndex(0f) // 设置播放器在底层显示
+            modifier = Modifier.fillMaxSize()  // 确保播放器填充整个屏幕
         )
+
+        // 顶部工具栏
+        if (controlsVisible) {
+            TopControlBar(
+                title = "Playing Video",
+                onBackClicked = onBackClicked,
+                modifier = Modifier.align(Alignment.TopStart)
+            )
+        }
+
+        // 底部控制栏
+        if (controlsVisible) {
+            BottomControlBar(
+                isPlaying = exoPlayer.playWhenReady,
+                onPlayPause = { exoPlayer.playWhenReady = !exoPlayer.playWhenReady },
+                onNext = { /* 下一集逻辑 */ },
+                onPrevious = { /* 上一集逻辑 */ },
+                progress = { progress },
+                modifier = Modifier.align(Alignment.BottomStart)
+            )
+        }
     }
 }
-
