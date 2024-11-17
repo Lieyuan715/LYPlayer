@@ -16,61 +16,59 @@ import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.ui.StyledPlayerView
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.app.Activity
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.compose.foundation.background
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 
 @Composable
 fun VideoPlayer(
     videoUri: Uri,
     modifier: Modifier = Modifier,
-    onBackClicked: () -> Unit, // 返回按钮的回调
-    onPlaybackStateChanged: (Boolean) -> Unit // 播放状态变化回调
+    onBackClicked: () -> Unit,
+    onPlaybackStateChanged: (Boolean) -> Unit
 ) {
     val context = LocalContext.current
 
     // 创建并管理 ExoPlayer 实例
     val exoPlayer = remember { ExoPlayer.Builder(context).build() }
 
-    // 控制栏可见性
+    // 控制栏可见性状态
     var controlsVisible by remember { mutableStateOf(true) }
 
-    // 播放进度
+    // 播放进度状态
     var progress by remember { mutableFloatStateOf(0f) }
 
     // 用户交互状态
     var isUserInteracting by remember { mutableStateOf(false) }
 
-    // 协程作用域
+    // 协程作用域与隐藏任务句柄
     val coroutineScope = rememberCoroutineScope()
+    var hideJob by remember { mutableStateOf<Job?>(null) }
 
-    // 播放器初始化与清理
+    // 初始化播放器并监听状态变化
     DisposableEffect(videoUri) {
-        // 设置媒体资源并准备播放器
         exoPlayer.setMediaItem(MediaItem.fromUri(videoUri))
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
 
-        // 添加播放状态监听器
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                // 播放状态发生变化时，调用回调
                 onPlaybackStateChanged(playbackState == Player.STATE_READY && exoPlayer.playWhenReady)
             }
         }
         exoPlayer.addListener(listener)
 
         onDispose {
-            // 移除监听器并释放播放器资源
             exoPlayer.removeListener(listener)
             exoPlayer.release()
         }
     }
 
-    // 更新播放进度，每500毫秒刷新一次
+    // 更新播放进度逻辑
     LaunchedEffect(exoPlayer) {
         while (true) {
             progress = if (exoPlayer.duration > 0) {
@@ -82,15 +80,21 @@ fun VideoPlayer(
         }
     }
 
-    // 显示控制栏并设置自动隐藏逻辑
-    fun showControls() {
-        controlsVisible = true
-        coroutineScope.launch {
-            delay(5000)
-            if (!isUserInteracting) { // 仅在用户未交互时隐藏
+    // 自动隐藏逻辑
+    fun startHideTimer() {
+        hideJob?.cancel() // 取消之前的隐藏任务
+        hideJob = coroutineScope.launch {
+            delay(5000) // 设置统一的隐藏延迟
+            if (!isUserInteracting) { // 确保非交互状态
                 controlsVisible = false
             }
         }
+    }
+
+    // 显示控制栏并重启隐藏逻辑
+    fun showControls() {
+        controlsVisible = true
+        startHideTimer()
     }
 
     // 隐藏系统状态栏和导航栏
@@ -113,37 +117,33 @@ fun VideoPlayer(
         }
     }
 
-    // 在组件加载时隐藏系统栏
+    // 隐藏系统栏
     val contextView = LocalView.current
-    LaunchedEffect(true) {
+    LaunchedEffect(Unit) {
         hideSystemBars(contextView)
+        showControls()
     }
 
-    // 主界面布局
+    // 视频播放器主布局
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
             .clickable {
-                // 点击切换控制栏显示状态
                 controlsVisible = !controlsVisible
-                if (controlsVisible) {
-                    showControls()
-                }
+                if (controlsVisible) showControls()
             }
     ) {
-        // 使用 AndroidView 嵌入 ExoPlayer 的 StyledPlayerView
         AndroidView(
             factory = { context ->
                 StyledPlayerView(context).apply {
                     player = exoPlayer
-                    setUseController(false) // 禁用默认控制器
+                    setUseController(false)
                 }
             },
             modifier = Modifier.fillMaxSize()
         )
 
-        // 顶部控制栏，显示时可见
         if (controlsVisible) {
             TopControlBar(
                 title = "Playing Video",
@@ -152,25 +152,28 @@ fun VideoPlayer(
             )
         }
 
-        // 底部控制栏，显示时可见
         if (controlsVisible) {
             BottomControlBar(
                 isPlaying = exoPlayer.playWhenReady,
                 onPlayPause = {
-                    // 切换播放/暂停状态
                     exoPlayer.playWhenReady = !exoPlayer.playWhenReady
-                    showControls() // 显示控制栏
+                    showControls()
                 },
                 onNext = { /* 下一集逻辑（未实现） */ },
                 onPrevious = { /* 上一集逻辑（未实现） */ },
                 progress = progress,
                 totalDuration = exoPlayer.duration,
-                onProgressChanged = { newProgress, isUserDragging ->
-                    isUserInteracting = isUserDragging // 更新用户交互状态
-                    if (!isUserDragging) {
-                        // 用户完成拖动时更新播放位置
-                        exoPlayer.seekTo((exoPlayer.duration * newProgress).toLong())
-                        isUserInteracting = false // 交互结束后重置
+                onProgressChanged = { newProgress, isUserDragging -> // 接收两个参数
+                    // 计算目标播放时间（总时长 * 进度百分比）
+                    val targetTime = (exoPlayer.duration * newProgress).toLong()
+
+                    // 跳转到目标时间
+                    exoPlayer.seekTo(targetTime)
+
+                    // 更新交互状态
+                    isUserInteracting = isUserDragging
+                    if (!isUserInteracting) {
+                        startHideTimer() // 恢复自动隐藏控制栏的逻辑
                     }
                 },
                 modifier = Modifier.align(Alignment.BottomStart)
@@ -178,3 +181,6 @@ fun VideoPlayer(
         }
     }
 }
+
+
+
