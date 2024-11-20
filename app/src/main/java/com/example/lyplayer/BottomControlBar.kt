@@ -60,7 +60,7 @@ fun BottomControlBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.03f))
+            .background(Color.Black.copy(alpha = 0.01f))
             .height((screenHeight / 3).dp) // 控制底部控制栏的高度
     ) {
 
@@ -121,7 +121,7 @@ fun BottomControlBar(
                             onProgressChanged(draggingProgress, true)
                         },
                         onDragCancel = { isUserDragging = false },
-                        onDrag = { change, dragAmount ->
+                        onDrag = { _, dragAmount ->
                             // 拖动时更新进度
                             val delta = dragAmount.x / size.width
                             draggingProgress = (draggingProgress + delta).coerceIn(0f, 1f)

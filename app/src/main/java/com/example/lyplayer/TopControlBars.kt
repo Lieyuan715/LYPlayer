@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -18,11 +19,17 @@ fun TopControlBar(
     onBackClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 屏幕尺寸
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp
+    val screenHeight = configuration.screenHeightDp
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.6f))
-            .padding(8.dp),
+            .background(Color.Black.copy(alpha = 0.01f))
+            .height((screenHeight / 4).dp)
+            .padding(top = (screenHeight / 64).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         IconButton(onClick = onBackClicked) {
@@ -34,7 +41,7 @@ fun TopControlBar(
         }
         BasicText(
             text = title,
-            modifier = Modifier.padding(start = 8.dp),
+            modifier = Modifier.padding(start = (screenWidth / 64).dp),
             style = MaterialTheme.typography.titleMedium.copy(color = Color.White)
         )
     }

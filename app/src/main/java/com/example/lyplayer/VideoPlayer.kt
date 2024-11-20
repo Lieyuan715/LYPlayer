@@ -19,19 +19,34 @@ import com.google.android.exoplayer2.ui.StyledPlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.Job
+import java.io.File
 
 @Composable
 fun VideoPlayer(
     videoUri: Uri,
     modifier: Modifier = Modifier,
     onBackClicked: () -> Unit,
-    onPlaybackStateChanged: (Boolean) -> Unit
+    onPlaybackStateChanged: (Boolean) -> Unit = {}
 ) {
+    // 拖动比例系数：100%的屏幕等于两分钟
+    val DRAG_RATIO = 120_000f
+
+    var videoTitle by remember { mutableStateOf("Unknown Video") } // 视频名称
+
     val context = LocalContext.current
+    val activity = context as? Activity
+
+    // 设置横屏
+    LaunchedEffect(Unit) {
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    }
 
     // 创建并管理 ExoPlayer 实例
     val exoPlayer = remember { ExoPlayer.Builder(context).build() }
@@ -55,9 +70,18 @@ fun VideoPlayer(
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
 
+        // 获取文件名作为视频标题
+        val path = videoUri.path
+        videoTitle = if (path != null) {
+            File(path).name // 提取文件名
+        } else {
+            "Unknown Video"
+        }
+
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                onPlaybackStateChanged(playbackState == Player.STATE_READY && exoPlayer.playWhenReady)
+                val isPlaying = playbackState == Player.STATE_READY && exoPlayer.playWhenReady
+                onPlaybackStateChanged(isPlaying)
             }
         }
         exoPlayer.addListener(listener)
@@ -65,6 +89,9 @@ fun VideoPlayer(
         onDispose {
             exoPlayer.removeListener(listener)
             exoPlayer.release()
+
+            // 恢复竖屏
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
@@ -82,10 +109,10 @@ fun VideoPlayer(
 
     // 自动隐藏逻辑
     fun startHideTimer() {
-        hideJob?.cancel() // 取消之前的隐藏任务
+        hideJob?.cancel()
         hideJob = coroutineScope.launch {
-            delay(5000) // 设置统一的隐藏延迟
-            if (!isUserInteracting) { // 确保非交互状态
+            delay(5000)
+            if (!isUserInteracting) {
                 controlsVisible = false
             }
         }
@@ -129,6 +156,28 @@ fun VideoPlayer(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDragStart = {
+                        isUserInteracting = true
+                        controlsVisible = true
+                    },
+                    onDragEnd = {
+                        isUserInteracting = false
+                        startHideTimer()
+                    },
+                    onDrag = { _, dragAmount ->
+                        val totalDuration = exoPlayer.duration
+                        if (totalDuration > 0) {
+                            val timeChange = (dragAmount.x / size.width) * DRAG_RATIO
+                            val targetTime = (exoPlayer.currentPosition + timeChange.toLong())
+                                .coerceIn(0, totalDuration)
+                            exoPlayer.seekTo(targetTime)
+                            progress = targetTime.toFloat() / totalDuration
+                        }
+                    }
+                )
+            }
             .clickable {
                 controlsVisible = !controlsVisible
                 if (controlsVisible) showControls()
@@ -146,8 +195,11 @@ fun VideoPlayer(
 
         if (controlsVisible) {
             TopControlBar(
-                title = "Playing Video",
-                onBackClicked = onBackClicked,
+                title = videoTitle,
+                onBackClicked = {
+                    activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                    onBackClicked()
+                },
                 modifier = Modifier.align(Alignment.TopStart)
             )
         }
@@ -159,21 +211,16 @@ fun VideoPlayer(
                     exoPlayer.playWhenReady = !exoPlayer.playWhenReady
                     showControls()
                 },
-                onNext = { /* 下一集逻辑（未实现） */ },
-                onPrevious = { /* 上一集逻辑（未实现） */ },
+                onNext = { /* 下一集逻辑 */ },
+                onPrevious = { /* 上一集逻辑 */ },
                 progress = progress,
                 totalDuration = exoPlayer.duration,
-                onProgressChanged = { newProgress, isUserDragging -> // 接收两个参数
-                    // 计算目标播放时间（总时长 * 进度百分比）
+                onProgressChanged = { newProgress, isUserDragging ->
                     val targetTime = (exoPlayer.duration * newProgress).toLong()
-
-                    // 跳转到目标时间
                     exoPlayer.seekTo(targetTime)
-
-                    // 更新交互状态
                     isUserInteracting = isUserDragging
                     if (!isUserInteracting) {
-                        startHideTimer() // 恢复自动隐藏控制栏的逻辑
+                        startHideTimer()
                     }
                 },
                 modifier = Modifier.align(Alignment.BottomStart)
@@ -181,6 +228,3 @@ fun VideoPlayer(
         }
     }
 }
-
-
-

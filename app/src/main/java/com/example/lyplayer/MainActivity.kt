@@ -1,7 +1,6 @@
 package com.example.lyplayer
 
 import android.content.Intent
-import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,82 +9,75 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.*
 import com.example.lyplayer.ui.theme.LYPlayerTheme
+import androidx.compose.ui.Alignment
 
 
-//主界面
 class MainActivity : ComponentActivity() {
 
-    private var videoUri: Uri? by mutableStateOf(null) // 存储选中的视频 URI
+    private var selectedFolderUri: Uri? by mutableStateOf(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val selectFileLauncher = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        // 文件夹选择器
+        val folderPickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                videoUri = uri
+                selectedFolderUri = uri // 记录选择的文件夹 URI
             }
         }
 
         setContent {
             LYPlayerTheme {
-                var isPlaying by remember { mutableStateOf(false) }
-
-                // 动态检测屏幕方向并调整布局
-                val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-                val isLandscape = videoUri != null
-
-                // 设置屏幕方向
-                LaunchedEffect(isLandscape) {
-                    requestedOrientation = if (isLandscape) {
-                        ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE // 锁定横屏
-                    } else {
-                        ActivityInfo.SCREEN_ORIENTATION_PORTRAIT // 锁定竖屏
-                    }
-                }
+                var scaffoldTitle by remember { mutableStateOf("LYPlayer") } // Scaffold 动态标题
+                var isPlaying by remember { mutableStateOf(false) } // 播放器状态
 
                 Scaffold(
+                    topBar = {
+                        if (!isPlaying) { // 播放器界面不显示顶部栏
+                            CustomTopBar(
+                                title = scaffoldTitle,
+                                onSettingsClicked = { /* 打开设置的逻辑 */ }
+                            )
+                        }
+                    },
                     floatingActionButton = {
-                        if (videoUri == null) {
+                        if (!isPlaying) { // 播放器界面不显示悬浮按钮
                             FloatingActionButton(
-                                onClick = { selectFileLauncher.launch(arrayOf("video/*")) },
+                                onClick = { folderPickerLauncher.launch(null) }, // 打开文件夹选择器
                                 modifier = Modifier.padding(16.dp)
                             ) {
-                                Icon(Icons.Filled.Add, contentDescription = "Add")
+                                Icon(Icons.Filled.Add, contentDescription = "Add Folder")
                             }
                         }
                     }
                 ) { innerPadding ->
                     Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-                        if (videoUri != null) {
-                            // 视频播放界面
-                            VideoPlayer(
-                                videoUri = videoUri!!,
-                                modifier = Modifier.fillMaxSize(),
-                                onBackClicked = { videoUri = null },
-                                onPlaybackStateChanged = { isPlaying = it }
+                        if (selectedFolderUri != null) {
+                            FolderView(
+                                selectedFolderUri = selectedFolderUri!!,
+                                onVideoClicked = { videoUri ->
+                                    isPlaying = true // 进入播放器
+                                },
+                                onPlaybackEnded = {
+                                    isPlaying = false // 播放结束时返回
+                                }
                             )
                         } else {
-                            // 主界面
-                            VideoPlayerPreview()
+                            Text(
+                                text = "No folder selected. Click the '+' button to choose one.",
+                                modifier = Modifier.align(Alignment.Center),
+                                style = MaterialTheme.typography.bodyLarge
+                            )
                         }
                     }
                 }
             }
         }
     }
-
-    override fun onBackPressed() {
-        if (videoUri != null) {
-            videoUri = null // 清空视频 URI
-        } else {
-            super.onBackPressed() // 执行默认的返回逻辑
-        }
-    }
 }
-
