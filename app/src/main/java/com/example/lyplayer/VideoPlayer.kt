@@ -1,30 +1,33 @@
 package com.example.lyplayer
 
+import android.app.Activity
+import android.content.Context
+import android.content.pm.ActivityInfo
 import android.net.Uri
 import android.os.Build
 import android.view.View
+import android.view.WindowInsets
+import android.view.WindowInsetsController
+import androidx.activity.ComponentActivity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
 import com.google.android.exoplayer2.ui.StyledPlayerView
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import android.app.Activity
-import android.content.pm.ActivityInfo
-import android.view.WindowInsets
-import android.view.WindowInsetsController
-import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.ui.input.pointer.pointerInput
 import kotlinx.coroutines.Job
 import java.io.File
 
@@ -35,48 +38,93 @@ fun VideoPlayer(
     onBackClicked: () -> Unit,
     onPlaybackStateChanged: (Boolean) -> Unit = {}
 ) {
-    // 拖动比例系数：100%的屏幕等于两分钟
     val DRAG_RATIO = 120_000f
-
-    var videoTitle by remember { mutableStateOf("Unknown Video") } // 视频名称
-
+    var videoTitle by remember { mutableStateOf("Unknown Video") }
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = context as? ComponentActivity
 
-    // 设置横屏
+    // SharedPreferences for saving the background play state
+    val sharedPreferences = context.getSharedPreferences("PlayerPreferences", Context.MODE_PRIVATE)
+    var isBackgroundPlayEnabled by remember {
+        mutableStateOf(sharedPreferences.getBoolean("isBackgroundPlayEnabled", false))
+    }
+
     LaunchedEffect(Unit) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
     }
 
-    // 创建并管理 ExoPlayer 实例
+
     val exoPlayer = remember { ExoPlayer.Builder(context).build() }
-
-    // 控制栏可见性状态
     var controlsVisible by remember { mutableStateOf(true) }
-
-    // 播放进度状态
     var progress by remember { mutableFloatStateOf(0f) }
-
-    // 用户交互状态
     var isUserInteracting by remember { mutableStateOf(false) }
-
-    // 协程作用域与隐藏任务句柄
+    var isRightToolbarVisible by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     var hideJob by remember { mutableStateOf<Job?>(null) }
+    val currentLifecycleObserver = remember { mutableStateOf<ExoPlayerLifecycleObserver?>(null) }
 
-    // 初始化播放器并监听状态变化
+    // 更新 ExoPlayer 生命周期绑定
+    fun updatePlayerLifecycle() {
+        // 移除当前绑定的观察者（如果有）
+        currentLifecycleObserver.value?.let {
+            activity?.lifecycle?.removeObserver(it)
+        }
+
+        // 创建新的观察者并绑定
+        val newObserver = ExoPlayerLifecycleObserver(exoPlayer) {
+            isBackgroundPlayEnabled // 动态判断后台播放状态
+        }
+        currentLifecycleObserver.value = newObserver
+
+        // 如果后台播放未启用，则添加观察者
+        if (!isBackgroundPlayEnabled) {
+            activity?.lifecycle?.addObserver(newObserver)
+        }
+    }
+
+
+
+    // 切换后台播放状态的逻辑
+    fun toggleBackgroundPlay(enabled: Boolean) {
+        isBackgroundPlayEnabled = enabled
+        sharedPreferences.edit().putBoolean("isBackgroundPlayEnabled", enabled).apply()
+
+        // 重新绑定生命周期观察者
+        updatePlayerLifecycle()
+
+        // 如果开启后台播放，确保播放器立即恢复播放
+        if (enabled) {
+            if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.playbackState == Player.STATE_ENDED) {
+                exoPlayer.prepare()
+            }
+            exoPlayer.playWhenReady = true
+        } else {
+            // 如果关闭后台播放，暂停播放器（如果生命周期不在前台）
+            if (activity?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.STARTED) != true) {
+                exoPlayer.playWhenReady = false
+            }
+        }
+    }
+
+
+    LaunchedEffect(isBackgroundPlayEnabled) {
+        if (isBackgroundPlayEnabled) {
+            // 确保后台播放时播放器正常运行
+            if (exoPlayer.playbackState == Player.STATE_IDLE || exoPlayer.playbackState == Player.STATE_ENDED) {
+                exoPlayer.prepare()
+            }
+            exoPlayer.playWhenReady = true
+        }
+    }
+
+
     DisposableEffect(videoUri) {
         exoPlayer.setMediaItem(MediaItem.fromUri(videoUri))
         exoPlayer.prepare()
         exoPlayer.playWhenReady = true
 
-        // 获取文件名作为视频标题
         val path = videoUri.path
-        videoTitle = if (path != null) {
-            File(path).name // 提取文件名
-        } else {
-            "Unknown Video"
-        }
+        videoTitle = if (path != null) File(path).name else "Unknown Video"
 
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -86,16 +134,23 @@ fun VideoPlayer(
         }
         exoPlayer.addListener(listener)
 
+        // 初始绑定生命周期
+        updatePlayerLifecycle()
+
         onDispose {
             exoPlayer.removeListener(listener)
-            exoPlayer.release()
+
+            // 退出时根据后台播放开关停止或继续播放
+            if (!isBackgroundPlayEnabled) {
+                exoPlayer.stop()
+                exoPlayer.release()
+            }
 
             // 恢复竖屏
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         }
     }
 
-    // 更新播放进度逻辑
     LaunchedEffect(exoPlayer) {
         while (true) {
             progress = if (exoPlayer.duration > 0) {
@@ -107,24 +162,23 @@ fun VideoPlayer(
         }
     }
 
-    // 自动隐藏逻辑
     fun startHideTimer() {
         hideJob?.cancel()
         hideJob = coroutineScope.launch {
             delay(5000)
-            if (!isUserInteracting) {
+            // 检查右侧工具栏状态，只有当其关闭时才隐藏上下工具栏
+            if (!isUserInteracting && !isRightToolbarVisible) {
                 controlsVisible = false
             }
         }
     }
 
-    // 显示控制栏并重启隐藏逻辑
     fun showControls() {
         controlsVisible = true
-        startHideTimer()
+        startHideTimer() // 显示控件后启动计时器
     }
 
-    // 隐藏系统状态栏和导航栏
+
     fun hideSystemBars(view: View) {
         val activity = view.context as? Activity ?: return
         val window = activity.window
@@ -144,14 +198,12 @@ fun VideoPlayer(
         }
     }
 
-    // 隐藏系统栏
     val contextView = LocalView.current
     LaunchedEffect(Unit) {
         hideSystemBars(contextView)
         showControls()
     }
 
-    // 视频播放器主布局
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -193,18 +245,28 @@ fun VideoPlayer(
             modifier = Modifier.fillMaxSize()
         )
 
+        // 顶部工具栏
         if (controlsVisible) {
             TopControlBar(
                 title = videoTitle,
+                isRightToolbarVisible = isRightToolbarVisible,
+                onToggleRightToolbar = { isRightToolbarVisible = !isRightToolbarVisible },
                 onBackClicked = {
+                    exoPlayer.stop()
+                    exoPlayer.release()
                     activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                     onBackClicked()
+                },
+                isBackgroundPlayEnabled = isBackgroundPlayEnabled,
+                onBackgroundPlayToggle = { enabled ->
+                    toggleBackgroundPlay(enabled) // 动态更新后台播放状态
                 },
                 modifier = Modifier.align(Alignment.TopStart)
             )
         }
 
-        if (controlsVisible) {
+        // 下方工具栏仅在没有打开右侧工具栏时显示
+        if (controlsVisible && !isRightToolbarVisible) {
             BottomControlBar(
                 isPlaying = exoPlayer.playWhenReady,
                 onPlayPause = {
@@ -227,4 +289,7 @@ fun VideoPlayer(
             )
         }
     }
+
 }
+
+
