@@ -165,7 +165,7 @@ fun VideoPlayer(
     fun startHideTimer() {
         hideJob?.cancel()
         hideJob = coroutineScope.launch {
-            delay(5000)
+            delay(10000)
             // 检查右侧工具栏状态，只有当其关闭时才隐藏上下工具栏
             if (!isUserInteracting && !isRightToolbarVisible) {
                 controlsVisible = false

@@ -1,5 +1,6 @@
 package com.example.lyplayer
 
+import android.content.pm.ActivityInfo
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -20,6 +21,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.ui.platform.LocalContext
 
 @Composable
 fun BottomControlBar(
@@ -32,49 +36,45 @@ fun BottomControlBar(
     onProgressChanged: (Float, Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 状态管理：是否正在拖动进度条
     var isUserDragging by remember { mutableStateOf(false) }
-    // 拖动时的临时进度
     var draggingProgress by remember { mutableFloatStateOf(progress) }
-    // 当前实际显示的进度
     val displayedProgress = if (isUserDragging) draggingProgress else progress
-    // 计算当前时间和总时间
     val displayedTime = (displayedProgress * totalDuration).toLong()
     val currentTimeFormatted = formatTime(displayedTime)
     val totalDurationFormatted = formatTime(totalDuration)
 
-    // 屏幕尺寸
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp
     val screenHeight = configuration.screenHeightDp
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
-    // 延迟更新进度条（防止频繁更新）
+    val context = LocalContext.current
+    val activity = context as? android.app.Activity
+
     LaunchedEffect(isUserDragging, draggingProgress) {
         if (isUserDragging) {
-            delay(50) // 延迟50ms更新进度，优化性能
+            delay(50)
             onProgressChanged(draggingProgress, false)
         }
     }
 
-    // 主容器
     Box(
         modifier = modifier
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.01f))
-            .height((screenHeight / 3).dp) // 控制底部控制栏的高度
+            .height(if (isLandscape) (screenHeight / 3).dp else (screenHeight / 4).dp) // 高度根据横竖屏调整
     ) {
-
-        // 时间显示
+        // 时间显示部分
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.BottomStart)
-                .padding(bottom = (screenHeight * 0.26f).dp) // 设置底部间距
+                .padding(bottom = if (isLandscape) (screenHeight * 0.26f).dp else (screenHeight * 0.12f).dp) // 时间部分下边距调整
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(start = (screenWidth / 36).dp) // 左侧内边距
+                    .padding(start = (screenWidth / 36).dp)
             ) {
                 Text(
                     text = currentTimeFormatted,
@@ -83,7 +83,7 @@ fun BottomControlBar(
                 Text(
                     text = "/",
                     style = MaterialTheme.typography.bodyMedium.copy(color = Color.White),
-                    modifier = Modifier.padding(horizontal = (screenWidth / 128).dp) // 字符间距
+                    modifier = Modifier.padding(horizontal = (screenWidth / 128).dp)
                 )
                 Text(
                     text = totalDurationFormatted,
@@ -92,7 +92,7 @@ fun BottomControlBar(
             }
         }
 
-        // 自定义进度条
+        // 进度条部分
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -100,13 +100,12 @@ fun BottomControlBar(
                 .padding(
                     start = (screenWidth / 64).dp,
                     end = (screenWidth / 64).dp,
-                    bottom = (screenHeight * 0.14f).dp // 进度条的底部内边距
+                    bottom = if (isLandscape) (screenHeight * 0.14f).dp else (screenHeight * 0.06f).dp // 进度条下边距调整
                 )
-                .height((screenHeight * 0.1f).dp) // 进度条高度
+                .height(if (isLandscape) (screenHeight * 0.1f).dp else (screenHeight * 0.06f).dp) // 进度条高度调整
                 .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = { offset ->
-                            // 点击进度条时更新进度
                             val clickedPercentage = (offset.x / size.width).coerceIn(0f, 1f)
                             draggingProgress = clickedPercentage
                             onProgressChanged(draggingProgress, true)
@@ -122,7 +121,6 @@ fun BottomControlBar(
                         },
                         onDragCancel = { isUserDragging = false },
                         onDrag = { _, dragAmount ->
-                            // 拖动时更新进度
                             val delta = dragAmount.x / size.width
                             draggingProgress = (draggingProgress + delta).coerceIn(0f, 1f)
                             onProgressChanged(draggingProgress, false)
@@ -132,10 +130,9 @@ fun BottomControlBar(
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val activeWidth = size.width * displayedProgress
-                val barHeight = size.height / 5 // 进度条高度
-                val verticalOffset = (size.height - barHeight) / 2 // 垂直居中
+                val barHeight = size.height / 5
+                val verticalOffset = (size.height - barHeight) / 2
 
-                // 绘制已播放部分
                 drawRoundRect(
                     color = Color(0xFFFF0000),
                     size = androidx.compose.ui.geometry.Size(activeWidth, barHeight),
@@ -143,7 +140,6 @@ fun BottomControlBar(
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
                 )
 
-                // 绘制未播放部分
                 drawRoundRect(
                     color = Color(0xFFB3B3B3),
                     size = androidx.compose.ui.geometry.Size(size.width - activeWidth, barHeight),
@@ -151,28 +147,26 @@ fun BottomControlBar(
                     cornerRadius = androidx.compose.ui.geometry.CornerRadius(4.dp.toPx())
                 )
 
-                // 绘制浮标
                 drawCircle(
                     color = Color.White,
-                    radius = barHeight, // 浮标半径
-                    center = Offset(activeWidth, size.height / 2) // 浮标位置
+                    radius = barHeight,
+                    center = Offset(activeWidth, size.height / 2)
                 )
             }
         }
 
-        // 播放控制按钮
+        // 播放控制按钮部分
         Row(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(
                     start = (screenWidth / 64).dp,
-                    bottom = (screenHeight * 0.01f).dp // 控制按钮底部间距
+                    bottom = (screenHeight * 0.01f).dp
                 )
         ) {
-            val pauseButtonSize = screenHeight * 0.12f
-            val lastNextButtonSize = screenHeight * 0.1f
+            val pauseButtonSize = if (isLandscape) screenHeight * 0.12f else screenHeight * 0.06f
+            val lastNextButtonSize = if (isLandscape) screenHeight * 0.1f else screenHeight * 0.04f
 
-            // 上一集按钮
             IconButton(onClick = onPrevious, modifier = Modifier.size(pauseButtonSize.dp)) {
                 Icon(
                     Icons.Default.SkipPrevious,
@@ -184,7 +178,6 @@ fun BottomControlBar(
 
             Spacer(modifier = Modifier.width((screenHeight / 32).dp))
 
-            // 播放/暂停按钮
             IconButton(onClick = onPlayPause, modifier = Modifier.size(pauseButtonSize.dp)) {
                 Icon(
                     if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -196,7 +189,6 @@ fun BottomControlBar(
 
             Spacer(modifier = Modifier.width((screenHeight / 32).dp))
 
-            // 下一集按钮
             IconButton(onClick = onNext, modifier = Modifier.size(pauseButtonSize.dp)) {
                 Icon(
                     Icons.Default.SkipNext,
@@ -205,6 +197,26 @@ fun BottomControlBar(
                     modifier = Modifier.size(lastNextButtonSize.dp)
                 )
             }
+        }
+
+        // 横竖屏切换按钮
+        IconButton(
+            onClick = {
+                activity?.requestedOrientation =
+                    if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                    else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = (screenWidth / 64).dp, bottom = (screenHeight * 0.01f).dp)
+                .size(if (isLandscape) (screenHeight * 0.16f).dp else (screenHeight * 0.08f).dp) // 按钮大小调整
+        ) {
+            Icon(
+                imageVector = if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                contentDescription = if (isLandscape) "Exit Fullscreen" else "Fullscreen",
+                tint = Color.White,
+                modifier = Modifier.size(if (isLandscape) (screenHeight * 0.12f).dp else (screenHeight * 0.06f).dp) // 图标大小调整
+            )
         }
     }
 }
