@@ -3,9 +3,12 @@ package com.example.lyplayer
 import android.content.pm.ActivityInfo
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -23,7 +26,14 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.window.Popup
+import com.google.android.exoplayer2.ExoPlayer
+import com.google.android.exoplayer2.PlaybackParameters
+import androidx.compose.ui.platform.LocalDensity
 
 @Composable
 fun BottomControlBar(
@@ -34,6 +44,7 @@ fun BottomControlBar(
     progress: Float,
     totalDuration: Long,
     onProgressChanged: (Float, Boolean) -> Unit,
+    exoPlayer: ExoPlayer,
     modifier: Modifier = Modifier
 ) {
     var isUserDragging by remember { mutableStateOf(false) }
@@ -50,6 +61,10 @@ fun BottomControlBar(
 
     val context = LocalContext.current
     val activity = context as? android.app.Activity
+    // 倍速调节逻辑相关变量
+    var isSpeedMenuVisible by remember { mutableStateOf(false) }
+    var playbackSpeed by remember { mutableStateOf(1.0f) } // 默认倍速
+
 
     LaunchedEffect(isUserDragging, draggingProgress) {
         if (isUserDragging) {
@@ -61,7 +76,14 @@ fun BottomControlBar(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.01f))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Black.copy(alpha = 0.0f), // 上方颜色
+                        Color.Black.copy(alpha = 0.7f)  // 下方颜色
+                    )
+                )
+            )
             .height(if (isLandscape) (screenHeight / 3).dp else (screenHeight / 4).dp) // 高度根据横竖屏调整
     ) {
         // 时间显示部分
@@ -199,25 +221,107 @@ fun BottomControlBar(
             }
         }
 
-        // 横竖屏切换按钮
-        IconButton(
-            onClick = {
-                activity?.requestedOrientation =
-                    if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                    else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            },
+        // 倍速按钮和菜单
+        Row(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(end = (screenWidth / 64).dp, bottom = (screenHeight * 0.01f).dp)
-                .size(if (isLandscape) (screenHeight * 0.16f).dp else (screenHeight * 0.08f).dp) // 按钮大小调整
+                .padding(
+                    end = if (isLandscape) (screenWidth * 0.06f).dp else (screenWidth * 0.12f).dp,
+                    bottom = if (isLandscape) (screenHeight * 0.01f).dp else (screenHeight * 0.025f).dp
+                )
         ) {
-            Icon(
-                imageVector = if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                contentDescription = if (isLandscape) "Exit Fullscreen" else "Fullscreen",
-                tint = Color.White,
-                modifier = Modifier.size(if (isLandscape) (screenHeight * 0.12f).dp else (screenHeight * 0.06f).dp) // 图标大小调整
-            )
+            // 自定义倍速按钮（移除波纹效果）
+            val buttonWidth = if (isLandscape) (screenWidth * 0.12f).dp else (screenWidth * 0.2f).dp
+            val buttonHeight = if (isLandscape) (screenHeight * 0.16f).dp else (screenHeight * 0.05f).dp
+
+            Box(
+                modifier = Modifier
+                    .padding(end = (screenWidth / 64).dp)
+                    .width(buttonWidth)
+                    .height(buttonHeight)
+                    .background(Color.White.copy(alpha = 0.00f), RectangleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { isSpeedMenuVisible = !isSpeedMenuVisible }, // 点击切换菜单状态
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "倍速",
+                    color = Color.White,
+                    style = MaterialTheme.typography.bodyMedium.copy(color = Color.White)
+                )
+            }
+
+            // 自定义菜单
+            if (isSpeedMenuVisible) {
+                val menuBottomPadding = if (isLandscape) (screenHeight * 0.75f).dp else (screenHeight * 0.475f).dp // 自定义顶部到底部间距
+                val density = LocalDensity.current // 获取当前的 Density 环境
+
+                Popup(
+                    alignment = Alignment.TopStart, // Popup 从按钮顶部对齐
+                    offset = with(density) { IntOffset(0, -menuBottomPadding.toPx().toInt()) }, // 控制距离底部的偏移量
+                    onDismissRequest = { isSpeedMenuVisible = false }
+                ) {
+                    val highlightColor = Color(0xFFFF0000) // 自定义高亮颜色
+
+                    Column(
+                        modifier = Modifier
+                            .width(buttonWidth) // 菜单宽度与按钮一致
+                            .background(
+                                color = Color.Black.copy(alpha = 0.9f), // 菜单背景颜色
+                                shape = RoundedCornerShape(8.dp) // 设置菜单圆角
+                            )
+                            .padding((screenHeight * 0.01f).dp) // 内边距
+                    ) {
+                        listOf(4.0f, 2.0f, 1.5f, 1.0f, 0.5f, 0.1f).forEach { speed ->
+                            Text(
+                                text = "$speed x",
+                                color = if (speed == playbackSpeed) highlightColor else Color.White, // 仅文字高亮
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = (screenHeight * 0.02f).dp, horizontal = (screenHeight * 0.01f).dp) // 调整选项的内边距
+                                    .clickable {
+                                        playbackSpeed = speed // 更新倍速
+                                        isSpeedMenuVisible = false // 关闭菜单
+                                        setPlaybackSpeed(exoPlayer, speed) // 更新播放器倍速
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
         }
+
+
+        // 横竖屏切换按钮
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomEnd) // 对齐到右下角
+                .padding(end = (screenWidth / 64).dp, bottom = (screenHeight * 0.01f).dp), // 外边距调整
+            verticalAlignment = Alignment.CenterVertically, // 垂直对齐方式
+            horizontalArrangement = Arrangement.End // 水平方向靠右对齐
+        ) {
+            // 横竖屏切换按钮
+            IconButton(
+                onClick = {
+                    activity?.requestedOrientation =
+                        if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        else ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                },
+                modifier = Modifier
+                    .size(if (isLandscape) (screenHeight * 0.16f).dp else (screenHeight * 0.08f).dp) // 按钮大小调整
+            ) {
+                // 图标
+                Icon(
+                    imageVector = if (isLandscape) Icons.Default.FullscreenExit else Icons.Default.Fullscreen, // 图标切换
+                    contentDescription = if (isLandscape) "Exit Fullscreen" else "Fullscreen", // 描述文本
+                    tint = Color.White, // 图标颜色
+                    modifier = Modifier.size(if (isLandscape) (screenHeight * 0.12f).dp else (screenHeight * 0.06f).dp) // 图标大小调整
+                )
+            }
+        }
+
     }
 }
 
@@ -231,4 +335,10 @@ fun formatTime(milliseconds: Long): String {
     } else {
         String.format("%02d:%02d", minutes, seconds)
     }
+}
+
+// 倍速设置函数
+fun setPlaybackSpeed(exoPlayer: ExoPlayer, speed: Float) {
+    exoPlayer.setPlaybackParameters(PlaybackParameters(speed))
+    println("ExoPlayer 播放速度已设置为：$speed 倍速")
 }

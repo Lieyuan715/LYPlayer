@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,7 +41,14 @@ fun TopControlBar(
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .background(Color.Black.copy(alpha = 0.01f))
+                .background(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.7f), // 上方颜色
+                            Color.Black.copy(alpha = 0.0f)  // 下方颜色
+                        )
+                    )
+                )
                 .height(if (isLandscape) (screenHeight / 4).dp else (screenHeight / 12).dp)
                 .padding(
                     horizontal = if (isLandscape) (screenWidth / 64).dp else (screenWidth / 32).dp,
