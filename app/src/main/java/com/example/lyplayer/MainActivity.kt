@@ -15,6 +15,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.*
 import com.example.lyplayer.ui.theme.LYPlayerTheme
 import androidx.compose.ui.Alignment
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.os.Build
+import android.os.IBinder
+import androidx.core.app.NotificationCompat
+import com.google.android.exoplayer2.SimpleExoPlayer
+import android.app.Service
 
 
 class MainActivity : ComponentActivity() {
@@ -63,9 +72,16 @@ class MainActivity : ComponentActivity() {
                                 selectedFolderUri = selectedFolderUri!!,
                                 onVideoClicked = { videoUri ->
                                     isPlaying = true // 进入播放器
+
+                                    // 启动前台服务以确保视频在后台播放
+                                    val serviceIntent = Intent(this@MainActivity, VideoPlayerService::class.java)
+                                    startService(serviceIntent)
                                 },
                                 onPlaybackEnded = {
                                     isPlaying = false // 播放结束时返回
+
+                                    // 停止前台服务
+                                    stopService(Intent(this@MainActivity, VideoPlayerService::class.java))
                                 }
                             )
                         } else {
@@ -79,5 +95,51 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+}
+
+class VideoPlayerService : Service() {
+
+    private var player: SimpleExoPlayer? = null
+
+    override fun onCreate() {
+        super.onCreate()
+        // 初始化 ExoPlayer
+        player = SimpleExoPlayer.Builder(this).build()
+    }
+
+    override fun onStartCommand(intent: Intent, flags: Int, startId: Int): Int {
+        // 创建通知渠道（仅在 Android 8.0 及以上版本需要）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channelId = "video_player_channel"
+            val channelName = "Video Player Notifications"
+            val channel = NotificationChannel(channelId, channelName, NotificationManager.IMPORTANCE_LOW)
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        // 创建前台通知
+        val notification: Notification = NotificationCompat.Builder(this, "video_player_channel")
+            .setContentTitle("Video is playing")
+            .setContentText("Your video is playing in the background.")
+            .setSmallIcon(android.R.drawable.ic_media_play)  // 使用系统自带的图标
+            .build()
+
+        // 启动前台服务
+        startForeground(1, notification)
+
+        // 返回START_STICKY，表示服务将在后台运行直到明确停止
+        return START_STICKY
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // 释放 ExoPlayer 资源
+        player?.release()
+        player = null
+    }
+
+    override fun onBind(intent: Intent?): IBinder? {
+        return null  // 不需要绑定
     }
 }

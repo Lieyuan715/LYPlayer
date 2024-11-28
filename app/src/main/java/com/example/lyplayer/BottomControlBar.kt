@@ -120,8 +120,8 @@ fun BottomControlBar(
                 .fillMaxWidth()
                 .align(Alignment.BottomStart)
                 .padding(
-                    start = (screenWidth / 64).dp,
-                    end = (screenWidth / 64).dp,
+                    start = (screenWidth * 0.025f ).dp,
+                    end = (screenWidth * 0.025f).dp,
                     bottom = if (isLandscape) (screenHeight * 0.14f).dp else (screenHeight * 0.06f).dp // 进度条下边距调整
                 )
                 .height(if (isLandscape) (screenHeight * 0.1f).dp else (screenHeight * 0.06f).dp) // 进度条高度调整
@@ -183,7 +183,7 @@ fun BottomControlBar(
                 .align(Alignment.BottomStart)
                 .padding(
                     start = (screenWidth / 64).dp,
-                    bottom = (screenHeight * 0.01f).dp
+                    bottom = (screenHeight * 0.02f).dp
                 )
         ) {
             val pauseButtonSize = if (isLandscape) screenHeight * 0.12f else screenHeight * 0.06f
@@ -198,7 +198,7 @@ fun BottomControlBar(
                 )
             }
 
-            Spacer(modifier = Modifier.width((screenHeight / 32).dp))
+            Spacer(modifier = Modifier.width((screenWidth / 32).dp))
 
             IconButton(onClick = onPlayPause, modifier = Modifier.size(pauseButtonSize.dp)) {
                 Icon(
@@ -209,7 +209,7 @@ fun BottomControlBar(
                 )
             }
 
-            Spacer(modifier = Modifier.width((screenHeight / 32).dp))
+            Spacer(modifier = Modifier.width((screenWidth / 32).dp))
 
             IconButton(onClick = onNext, modifier = Modifier.size(pauseButtonSize.dp)) {
                 Icon(
