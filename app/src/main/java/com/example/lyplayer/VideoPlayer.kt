@@ -3,7 +3,6 @@ package com.example.lyplayer
 import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.view.View
@@ -14,20 +13,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
 import com.google.android.exoplayer2.ExoPlayer
 import com.google.android.exoplayer2.MediaItem
 import com.google.android.exoplayer2.Player
@@ -36,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import java.io.File
+import kotlin.math.absoluteValue
 
 @Composable
 fun VideoPlayer(
@@ -46,13 +40,12 @@ fun VideoPlayer(
 ) {
     // 设置拖动快进的比例
     val DRAG_RATIO = 120_000f
+    // 设置拖动灵敏度的阈值，单位是像素
+    val dragThreshold = 20f
+
     var videoTitle by remember { mutableStateOf("Unknown Video") } // 视频标题
     val context = LocalContext.current
     val activity = context as? ComponentActivity
-
-    val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp // 屏幕宽度
-    val screenHeight = configuration.screenHeightDp // 屏幕高度
 
     // 获取 SharedPreferences 用于保存后台播放设置和播放位置
     val sharedPreferences = context.getSharedPreferences("PlayerPreferences", Context.MODE_PRIVATE)
@@ -215,13 +208,17 @@ fun VideoPlayer(
                         startHideTimer() // 拖动结束后启动隐藏控制栏计时器
                     },
                     onDrag = { _, dragAmount ->
-                        val totalDuration = exoPlayer.duration
-                        if (totalDuration > 0) {
-                            val timeChange = (dragAmount.x / size.width) * DRAG_RATIO
-                            val targetTime = (exoPlayer.currentPosition + timeChange.toLong())
-                                .coerceIn(0, totalDuration)
-                            exoPlayer.seekTo(targetTime) // 快进或快退
-                            progress = targetTime.toFloat() / totalDuration
+                        // 判断是否超过拖动阈值
+                        if (dragAmount.x.absoluteValue > dragThreshold) {
+                            val totalDuration = exoPlayer.duration
+                            if (totalDuration > 0) {
+                                // 计算拖动时间，灵敏度可以继续通过 DRAG_RATIO 调节
+                                val timeChange = (dragAmount.x / size.width) * DRAG_RATIO
+                                val targetTime = (exoPlayer.currentPosition + timeChange.toLong())
+                                    .coerceIn(0, totalDuration)
+                                exoPlayer.seekTo(targetTime) // 快进或快退
+                                progress = targetTime.toFloat() / totalDuration
+                            }
                         }
                     }
                 )
@@ -239,41 +236,6 @@ fun VideoPlayer(
                 .fillMaxSize()
                 .background(Color.Transparent)
         )
-
-        // 中央暂停提示
-        if (!exoPlayer.playWhenReady) {
-            var showPauseOverlay by remember { mutableStateOf(true) }
-            val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
-
-            LaunchedEffect(Unit) {
-                delay(1500)
-                showPauseOverlay = false // 1.5秒后隐藏暂停提示
-            }
-
-            if (showPauseOverlay) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(if (isLandscape) (screenWidth / 12).dp else (screenWidth / 6).dp)
-                            .height(if (isLandscape) (screenHeight / 10).dp else (screenHeight / 24).dp)
-                            .background(Color.Black.copy(alpha = 0.5f), shape = RoundedCornerShape(8.dp))
-                            .padding(4.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "已暂停",
-                            color = Color.White,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-            }
-        }
 
         // 顶部工具栏
         if (controlsVisible) {

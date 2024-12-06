@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -130,11 +131,139 @@ fun TopControlBar(
                     horizontalAlignment = Alignment.Start
                 ) {
                     item {
-                        Text(
-                            text = "工具栏",
-                            style = MaterialTheme.typography.titleMedium.copy(color = Color.White),
-                            modifier = Modifier.padding(horizontal = (screenWidth / 64).dp)
-                        )
+                        // 横向排列四个正方形按钮
+                        Row(
+                            modifier = Modifier
+                                .padding(
+                                    horizontal = if (isLandscape) (screenWidth / 64).dp else (screenWidth / 16).dp,
+                                    vertical = if (isLandscape) (screenHeight / 32).dp else (screenHeight / 64).dp
+                                )
+                                .fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(if (isLandscape) (screenWidth / 19).dp else (screenWidth / 10).dp) // 设置按钮之间的间距
+                        ) {
+                            // 按钮 1
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally, // 图标和文本居中对齐
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isLandscape) (screenWidth / 16).dp else (screenWidth / 8).dp) // 正方形按钮的大小
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF464646).copy(alpha = 0.5f))
+                                        .clickable(
+                                            indication = null,  // 禁用点击波纹效果
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) {
+                                            // 在点击按钮时启用小窗播放模式
+
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.PictureInPictureAlt,  // 小窗播放图标
+                                        contentDescription = "小窗播放",
+                                        modifier = Modifier
+                                            .size(if (isLandscape) (screenWidth / 25).dp else (screenWidth / 12).dp), // 调整图标的大小
+                                        tint = Color.White
+                                    )
+                                }
+
+                                // 小窗播放文字
+                                Text(
+                                    text = "小窗播放",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFacacac)),
+                                    modifier = Modifier.padding(top = 4.dp) // 设置文字与按钮之间的间距
+                                )
+                            }
+
+                            // 按钮 2
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally, // 图标和文本居中对齐
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isLandscape) (screenWidth / 16).dp else (screenWidth / 8).dp) // 正方形按钮的大小
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF464646).copy(alpha = 0.5f))
+                                        .clickable(
+                                            indication = null,  // 禁用点击波纹效果
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) {
+                                            // 按钮点击事件
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // 图标
+                                }
+
+                                // 文字
+                                Text(
+                                    text = "按钮 2",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFacacac)),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            // 按钮 3
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally, // 图标和文本居中对齐
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isLandscape) (screenWidth / 16).dp else (screenWidth / 8).dp) // 正方形按钮的大小
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF464646).copy(alpha = 0.5f))
+                                        .clickable(
+                                            indication = null,  // 禁用点击波纹效果
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) {
+                                            // 按钮点击事件
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // 图标
+                                }
+
+                                // 文字
+                                Text(
+                                    text = "按钮 3",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFacacac)),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+
+                            // 按钮 4
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally, // 图标和文本居中对齐
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(if (isLandscape) (screenWidth / 16).dp else (screenWidth / 8).dp) // 正方形按钮的大小
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color(0xFF464646).copy(alpha = 0.5f))
+                                        .clickable(
+                                            indication = null,  // 禁用点击波纹效果
+                                            interactionSource = remember { MutableInteractionSource() }
+                                        ) {
+                                            // 按钮点击事件
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // 图标
+                                }
+
+                                // 文字
+                                Text(
+                                    text = "按钮 4",
+                                    style = MaterialTheme.typography.bodySmall.copy(color = Color(0xFFacacac)),
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
                     }
 
                     item {
@@ -151,7 +280,7 @@ fun TopControlBar(
                     item {
                         Box(
                             modifier = Modifier
-                                .padding(horizontal = 4.dp, vertical = 8.dp) // 添加外间距，避免背景裁剪到父布局边界
+                                .padding(horizontal = (screenHeight / 64).dp, vertical = (screenHeight / 32).dp) // 添加外间距，避免背景裁剪到父布局边界
                                 .clip(RoundedCornerShape(4.dp)) // 设置圆角形状
                                 .background(Color(0xFF464646).copy(alpha = 0.5f))
                         ) {
@@ -202,7 +331,6 @@ fun TopControlBar(
             }
         }
     }
-
 }
 
 @Composable
