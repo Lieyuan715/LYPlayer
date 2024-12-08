@@ -1,7 +1,7 @@
 package com.example.lyplayer
 
-import android.content.Intent
-import android.net.Uri
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -21,44 +21,88 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import com.google.android.exoplayer2.SimpleExoPlayer
 import android.app.Service
+import android.content.Intent
+import android.content.SharedPreferences
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.result.ActivityResultLauncher
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import androidx.core.app.NotificationCompat
 
+// SharedPreferences 管理代码
+fun getSharedPreferences(context: Context): SharedPreferences {
+    return context.getSharedPreferences("FolderPrefs", Context.MODE_PRIVATE)
+}
+
+fun saveSelectedFolderUri(context: Context, folderUri: Uri) {
+    val sharedPreferences = getSharedPreferences(context)
+    sharedPreferences.edit().apply {
+        putString("selected_folder_uri", folderUri.toString())
+        apply()  // 异步保存
+    }
+}
+
+fun getSavedFolderUri(context: Context): Uri? {
+    val sharedPreferences = getSharedPreferences(context)
+    val uriString = sharedPreferences.getString("selected_folder_uri", null)
+    return uriString?.let { Uri.parse(it) }  // 如果保存了路径，返回 Uri
+}
 
 class MainActivity : ComponentActivity() {
 
     private var selectedFolderUri: Uri? by mutableStateOf(null)
+    private val REQUEST_CODE = 1001  // 请求码
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 获取上次选择的文件夹 URI
+        selectedFolderUri = getSavedFolderUri(this)
+
+        // 请求存储权限
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            // 如果没有权限，则请求权限
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), REQUEST_CODE)
+        }
+
         // 文件夹选择器
-        val folderPickerLauncher = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val folderPickerLauncher: ActivityResultLauncher<Uri?> = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri != null) {
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 selectedFolderUri = uri // 记录选择的文件夹 URI
+                saveSelectedFolderUri(this, uri) // 保存选中的文件夹 URI
             }
         }
 
         setContent {
             LYPlayerTheme {
-                var scaffoldTitle by remember { mutableStateOf("LYPlayer") } // Scaffold 动态标题
-                var isPlaying by remember { mutableStateOf(false) } // 播放器状态
+                var isPlaying by remember { mutableStateOf(false) }
+                var title by remember { mutableStateOf("LYPlayer") } // 初始标题
+                var sortOption by remember { mutableStateOf(SortOption.NAME) } // 初始排序方式为按名称排序
+
+                val currentFolderTitle = selectedFolderUri?.lastPathSegment?.replace("primary:", "根文件夹:") ?: title
 
                 Scaffold(
                     topBar = {
                         if (!isPlaying) { // 播放器界面不显示顶部栏
                             CustomTopBar(
-                                title = scaffoldTitle,
-                                onSettingsClicked = { /* 打开设置的逻辑 */ }
+                                title = currentFolderTitle,
+                                onSettingsClicked = { /* 处理设置点击事件 */ },
+                                onSortOptionSelected = { selectedSortOption -> // 排序选择回调
+                                    sortOption = selectedSortOption
+                                }
                             )
                         }
                     },
                     floatingActionButton = {
                         if (!isPlaying) { // 播放器界面不显示悬浮按钮
                             FloatingActionButton(
-                                onClick = { folderPickerLauncher.launch(null) }, // 打开文件夹选择器
+                                onClick = { folderPickerLauncher.launch(selectedFolderUri ?: Uri.EMPTY) }, // 打开文件夹选择器
                                 modifier = Modifier.padding(16.dp)
                             ) {
                                 Icon(Icons.Filled.Add, contentDescription = "Add Folder")
@@ -66,33 +110,55 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 ) { innerPadding ->
-                    Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                            .background(Color.White) // 设置背景颜色
+                    ) {
+                        // 这里使用 LaunchedEffect 来确保每次 selectedFolderUri 更新时重新加载内容
+                        LaunchedEffect(selectedFolderUri) {
+                            // 每当 selectedFolderUri 发生变化时重新刷新内容
+                        }
+
                         if (selectedFolderUri != null) {
                             FolderView(
                                 selectedFolderUri = selectedFolderUri!!,
                                 onVideoClicked = { videoUri ->
                                     isPlaying = true // 进入播放器
-
-                                    // 启动前台服务以确保视频在后台播放
                                     val serviceIntent = Intent(this@MainActivity, VideoPlayerService::class.java)
                                     startService(serviceIntent)
                                 },
                                 onPlaybackEnded = {
                                     isPlaying = false // 播放结束时返回
-
-                                    // 停止前台服务
                                     stopService(Intent(this@MainActivity, VideoPlayerService::class.java))
-                                }
+                                },
+                                sortOption = sortOption // 将排序选项传递给 FolderView
                             )
                         } else {
                             Text(
-                                text = "No folder selected. Click the '+' button to choose one.",
+                                text = "点击 '+' 按钮选择一个文件夹。",
                                 modifier = Modifier.align(Alignment.Center),
                                 style = MaterialTheme.typography.bodyLarge
                             )
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // 处理权限请求的结果
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode == REQUEST_CODE) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // 权限授予成功
+                Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
+            } else {
+                // 权限被拒绝
+                Toast.makeText(this, "存储权限被拒绝", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -120,8 +186,8 @@ class VideoPlayerService : Service() {
 
         // 创建前台通知
         val notification: Notification = NotificationCompat.Builder(this, "video_player_channel")
-            .setContentTitle("Video is playing")
-            .setContentText("Your video is playing in the background.")
+            .setContentTitle("视频正在播放")
+            .setContentText("您的视频正在后台播放。")
             .setSmallIcon(android.R.drawable.ic_media_play)  // 使用系统自带的图标
             .build()
 
