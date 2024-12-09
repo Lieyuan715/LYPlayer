@@ -230,7 +230,6 @@ fun BottomControlBar(
                     bottom = if (isLandscape) (screenHeight * 0.01f).dp else (screenHeight * 0.025f).dp
                 )
         ) {
-            // 自定义倍速按钮（移除波纹效果）
             val buttonWidth = if (isLandscape) (screenWidth * 0.12f).dp else (screenWidth * 0.2f).dp
             val buttonHeight = if (isLandscape) (screenHeight * 0.16f).dp else (screenHeight * 0.05f).dp
 
@@ -275,9 +274,7 @@ fun BottomControlBar(
                             .padding((screenHeight * 0.01f).dp) // 内边距
                     ) {
                         listOf(4.0f, 2.0f, 1.5f, 1.0f, 0.5f, 0.1f).forEach { speed ->
-                            Text(
-                                text = "$speed x",
-                                color = if (speed == playbackSpeed) highlightColor else Color.White, // 仅文字高亮
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(vertical = (screenHeight * 0.02f).dp, horizontal = (screenHeight * 0.01f).dp) // 调整选项的内边距
@@ -286,7 +283,14 @@ fun BottomControlBar(
                                         isSpeedMenuVisible = false // 关闭菜单
                                         setPlaybackSpeed(exoPlayer, speed) // 更新播放器倍速
                                     }
-                            )
+                            ) {
+                                // 使用 Box 来对齐文字
+                                Text(
+                                    text = "$speed x",
+                                    color = if (speed == playbackSpeed) highlightColor else Color.White, // 仅文字高亮
+                                    modifier = Modifier.align(Alignment.Center) // 在 Box 内居中对齐
+                                )
+                            }
                         }
                     }
                 }

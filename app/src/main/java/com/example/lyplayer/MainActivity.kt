@@ -122,7 +122,9 @@ class MainActivity : ComponentActivity() {
                         if (!isPlaying) { // 播放器界面不显示悬浮按钮
                             FloatingActionButton(
                                 onClick = { folderPickerLauncher.launch(selectedFolderUri ?: Uri.EMPTY) },
-                                modifier = Modifier.padding(16.dp)
+                                modifier = Modifier.padding(16.dp),
+                                containerColor = Color.Black,
+                                contentColor = Color.White,
                             ) {
                                 Icon(Icons.Filled.Add, contentDescription = "Add Folder")
                             }
