@@ -25,9 +25,11 @@ import androidx.compose.ui.unit.dp
 fun CustomTopBar(
     title: String,
     onSettingsClicked: () -> Unit,
-    onSortOptionSelected: (SortOption) -> Unit
+    onSortOptionSelected: (SortOption) -> Unit,
+    selectedSortOption: SortOption // 新增：接收选中的排序方式
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) } // 控制主菜单展开/收起
+    var sortOptionsExpanded by remember { mutableStateOf(false) } // 控制排序选项的展开/收起
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp
     val screenWidth = configuration.screenWidthDp
@@ -64,7 +66,7 @@ fun CustomTopBar(
             }
 
         IconButton(
-            onClick = { expanded = !expanded },
+            onClick = { expanded = !expanded }, // 切换主菜单展开状态
             modifier = iconButtonModifier,
         ) {
             Icon(
@@ -74,18 +76,17 @@ fun CustomTopBar(
             )
         }
 
-        // 在新的 Box 中控制 DropdownMenu 的位置
         Box(
             modifier = Modifier
-                .align(Alignment.TopStart) // 控制 DropdownMenu 位置
+                .align(Alignment.TopStart)
                 .offset {
                     IntOffset(
-                        x = buttonPosition.x.toInt(), // 使菜单出现在按钮的右侧
-                        y = (buttonPosition.y + 40).toInt() // 垂直方向适当调整
+                        x = buttonPosition.x.toInt(),
+                        y = (buttonPosition.y + 40).toInt()
                     )
                 }
         ) {
-            // 使用 CustomDropdownMenu
+            // 使用 CustomDropdownMenu 控制主菜单展开/收起
             if (expanded) {
                 CustomDropdownMenu(
                     expanded = expanded,
@@ -98,32 +99,72 @@ fun CustomTopBar(
                             textColor = Color.White,
                         ),
                         MenuItem(
-                            title = "按名称排序",
-                            onClick = { onSortOptionSelected(SortOption.NAME) },
-                            backgroundColor = Color(0xFF333333),
-                            textColor = Color.White,
-                        ),
-                        MenuItem(
-                            title = "按日期排序",
-                            onClick = { onSortOptionSelected(SortOption.DATE) },
-                            backgroundColor = Color(0xFF333333),
-                            textColor = Color.White,
-                        ),
-                        MenuItem(
-                            title = "按大小排序",
-                            onClick = { onSortOptionSelected(SortOption.SIZE) },
-                            backgroundColor = Color(0xFF333333),
-                            textColor = Color.White,
-                        ),
-                        MenuItem(
-                            title = "按类型排序",
-                            onClick = { onSortOptionSelected(SortOption.TYPE) },
+                            title = "排序选项",
+                            onClick = {
+                                // 切换排序选项的展开状态
+                                sortOptionsExpanded = !sortOptionsExpanded
+                            },
                             backgroundColor = Color(0xFF333333),
                             textColor = Color.White,
                         )
                     ),
-                    backgroundColor = Color(0xFF212121), // 全局菜单背景颜色，深灰
-                    shadowElevation = 8.dp, // 阴影效果
+                    backgroundColor = Color(0xFF212121),
+                    shadowElevation = 8.dp,
+                )
+            }
+        }
+
+        // 这里是显示排序选项的逻辑，不受主菜单控制
+        if (sortOptionsExpanded) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset {
+                        IntOffset(
+                            x = buttonPosition.x.toInt(),
+                            y = (buttonPosition.y + 90).toInt() // 适当调整排序选项的位置
+                        )
+                    }
+            ) {
+                CustomDropdownMenu(
+                    expanded = sortOptionsExpanded,
+                    onDismissRequest = { sortOptionsExpanded = false },
+                    menuItems = listOf(
+                        MenuItem(
+                            title = "按名称排序",
+                            onClick = {
+                                onSortOptionSelected(SortOption.NAME)
+                            },
+                            backgroundColor = if (selectedSortOption == SortOption.NAME) Color(0xFF666666) else Color(0xFF333333),
+                            textColor = Color.White,
+                        ),
+                        MenuItem(
+                            title = "按日期排序",
+                            onClick = {
+                                onSortOptionSelected(SortOption.DATE)
+                            },
+                            backgroundColor = if (selectedSortOption == SortOption.DATE) Color(0xFF666666) else Color(0xFF333333),
+                            textColor = Color.White,
+                        ),
+                        MenuItem(
+                            title = "按大小排序",
+                            onClick = {
+                                onSortOptionSelected(SortOption.SIZE)
+                            },
+                            backgroundColor = if (selectedSortOption == SortOption.SIZE) Color(0xFF666666) else Color(0xFF333333),
+                            textColor = Color.White,
+                        ),
+                        MenuItem(
+                            title = "按类型排序",
+                            onClick = {
+                                onSortOptionSelected(SortOption.TYPE)
+                            },
+                            backgroundColor = if (selectedSortOption == SortOption.TYPE) Color(0xFF666666) else Color(0xFF333333),
+                            textColor = Color.White,
+                        )
+                    ),
+                    backgroundColor = Color(0xFF212121),
+                    shadowElevation = 8.dp,
                 )
             }
         }

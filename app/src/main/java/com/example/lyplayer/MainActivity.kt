@@ -107,11 +107,14 @@ class MainActivity : ComponentActivity() {
                         if (!isPlaying) { // 播放器界面不显示顶部栏
                             CustomTopBar(
                                 title = currentFolderTitle,
-                                onSettingsClicked = { /* 处理设置点击事件 */ },
+                                onSettingsClicked = {
+                                    // 处理设置点击事件
+                                },
                                 onSortOptionSelected = { selectedSortOption ->
                                     sortOption = selectedSortOption  // 更新排序选项
                                     saveSortOption(this, selectedSortOption)  // 保存到 SharedPreferences
-                                }
+                                },
+                                selectedSortOption = sortOption // 将 sortOption 作为 selectedSortOption 传递
                             )
                         }
                     },

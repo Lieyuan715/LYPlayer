@@ -26,8 +26,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import android.util.LruCache
+import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 
 
 // 文件缓存管理对象
@@ -71,7 +75,6 @@ enum class SortOption {
     NAME, DATE, SIZE, TYPE
 }
 
-// 文件夹视图
 @Composable
 fun FolderView(
     selectedFolderUri: Uri,
@@ -113,8 +116,19 @@ fun FolderView(
             SortOption.NAME -> file1.name?.compareTo(file2.name ?: "") ?: 0
             SortOption.DATE -> file1.lastModified().compareTo(file2.lastModified())
             SortOption.SIZE -> file1.length().compareTo(file2.length())
-            SortOption.TYPE -> file1.name?.substringAfterLast('.', "")
-                ?.compareTo(file2.name?.substringAfterLast('.', "") ?: "") ?: 0
+            SortOption.TYPE -> {
+                val type1 = file1.name?.substringAfterLast('.', "")
+                val type2 = file2.name?.substringAfterLast('.', "")
+
+                // 先按类型排序，如果类型相同再按名称排序
+                val typeComparison = type1?.compareTo(type2 ?: "") ?: 0
+                if (typeComparison != 0) {
+                    typeComparison // 如果类型不同，返回按类型的比较结果
+                } else {
+                    // 类型相同则按名称排序
+                    file1.name?.compareTo(file2.name ?: "") ?: 0
+                }
+            }
         }
     } ?: emptyList()
 
@@ -136,28 +150,47 @@ fun FolderView(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // 显示文件夹的标题和返回按钮
             item {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth()
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
                 ) {
-                    Text(
-                        text = currentFolderTitle,
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    // 返回上级文件夹按钮
+                    // 如果文件夹历史记录中有上一级文件夹，显示返回按钮
                     if (folderHistory.size > 1) {
-                        Text(
-                            text = "返回上级文件夹",
-                            style = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.primary),
+                        Box(
                             modifier = Modifier
-                                .padding(8.dp)
-                                .clickable {
+                                .align(Alignment.CenterStart) // 按钮左对齐
+                                .size(28.dp) // 设置按钮的大小
+                        ) {
+                            IconButton(
+                                onClick = {
                                     folderHistory = folderHistory.dropLast(1)  // 返回上一级文件夹
-                                }
+                                },
+                                modifier = Modifier.fillMaxSize() // 确保按钮填满整个区域
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.ArrowBack,
+                                    contentDescription = "返回上级文件夹",
+                                    tint = Color.Black // 设置按钮颜色为黑色
+                                )
+                            }
+                        }
+                    }
+
+                    // 文件夹标题居中显示，超出部分显示省略号
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center) // 居中显示
+                            .fillMaxWidth(0.8f) // 最大宽度为屏幕的80%
+                    ) {
+                        Text(
+                            text = currentFolderTitle,
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.align(Alignment.Center),  // 居中显示文本
+                            maxLines = 1, // 限制为一行显示
+                            overflow = TextOverflow.Ellipsis, // 超出部分使用省略号显示
+                            color = Color.Black // 设置字体颜色为黑色
                         )
                     }
                 }
