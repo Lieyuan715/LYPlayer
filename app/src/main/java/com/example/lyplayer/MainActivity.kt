@@ -53,6 +53,20 @@ fun getSavedFolderUri(context: Context): Uri? {
     return uriString?.let { Uri.parse(it) }  // 如果保存了路径，返回 Uri
 }
 
+fun saveSortOption(context: Context, sortOption: SortOption) {
+    val sharedPreferences = getSharedPreferences(context)
+    sharedPreferences.edit().apply {
+        putString("sort_option", sortOption.name)  // 保存排序选项的名称
+        apply()  // 异步保存
+    }
+}
+
+fun getSavedSortOption(context: Context): SortOption {
+    val sharedPreferences = getSharedPreferences(context)
+    val savedOption = sharedPreferences.getString("sort_option", SortOption.TYPE.name)  // 默认排序按类型
+    return SortOption.valueOf(savedOption ?: SortOption.TYPE.name)
+}
+
 class MainActivity : ComponentActivity() {
 
     private var selectedFolderUri: Uri? by mutableStateOf(null)
@@ -66,7 +80,6 @@ class MainActivity : ComponentActivity() {
 
         // 请求存储权限
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-            // 如果没有权限，则请求权限
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE), REQUEST_CODE)
         }
 
@@ -83,7 +96,9 @@ class MainActivity : ComponentActivity() {
             LYPlayerTheme {
                 var isPlaying by remember { mutableStateOf(false) }
                 var title by remember { mutableStateOf("LYPlayer") } // 初始标题
-                var sortOption by remember { mutableStateOf(SortOption.NAME) } // 初始排序方式为按名称排序
+
+                // 从 SharedPreferences 获取并设置排序选项
+                var sortOption by remember { mutableStateOf(getSavedSortOption(this)) } // 加载保存的排序方式
 
                 val currentFolderTitle = selectedFolderUri?.lastPathSegment?.replace("primary:", "根文件夹:") ?: title
 
@@ -93,8 +108,9 @@ class MainActivity : ComponentActivity() {
                             CustomTopBar(
                                 title = currentFolderTitle,
                                 onSettingsClicked = { /* 处理设置点击事件 */ },
-                                onSortOptionSelected = { selectedSortOption -> // 排序选择回调
-                                    sortOption = selectedSortOption
+                                onSortOptionSelected = { selectedSortOption ->
+                                    sortOption = selectedSortOption  // 更新排序选项
+                                    saveSortOption(this, selectedSortOption)  // 保存到 SharedPreferences
                                 }
                             )
                         }
@@ -102,7 +118,7 @@ class MainActivity : ComponentActivity() {
                     floatingActionButton = {
                         if (!isPlaying) { // 播放器界面不显示悬浮按钮
                             FloatingActionButton(
-                                onClick = { folderPickerLauncher.launch(selectedFolderUri ?: Uri.EMPTY) }, // 打开文件夹选择器
+                                onClick = { folderPickerLauncher.launch(selectedFolderUri ?: Uri.EMPTY) },
                                 modifier = Modifier.padding(16.dp)
                             ) {
                                 Icon(Icons.Filled.Add, contentDescription = "Add Folder")
@@ -114,28 +130,30 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(innerPadding)
-                            .background(Color.White) // 设置背景颜色
+                            .background(Color.White)
                     ) {
                         // 这里使用 LaunchedEffect 来确保每次 selectedFolderUri 更新时重新加载内容
                         LaunchedEffect(selectedFolderUri) {
                             // 每当 selectedFolderUri 发生变化时重新刷新内容
                         }
 
-                        if (selectedFolderUri != null) {
+                        // 调用 FolderView 时，要确保它在 Composable 函数中被调用
+                        selectedFolderUri?.let { folderUri ->
                             FolderView(
-                                selectedFolderUri = selectedFolderUri!!,
+                                selectedFolderUri = folderUri,
                                 onVideoClicked = { videoUri ->
-                                    isPlaying = true // 进入播放器
+                                    isPlaying = true
                                     val serviceIntent = Intent(this@MainActivity, VideoPlayerService::class.java)
                                     startService(serviceIntent)
                                 },
                                 onPlaybackEnded = {
-                                    isPlaying = false // 播放结束时返回
+                                    isPlaying = false
                                     stopService(Intent(this@MainActivity, VideoPlayerService::class.java))
                                 },
                                 sortOption = sortOption // 将排序选项传递给 FolderView
                             )
-                        } else {
+                        } ?: run {
+                            // 如果没有文件夹选择，显示提示文本
                             Text(
                                 text = "点击 '+' 按钮选择一个文件夹。",
                                 modifier = Modifier.align(Alignment.Center),
@@ -154,10 +172,8 @@ class MainActivity : ComponentActivity() {
 
         if (requestCode == REQUEST_CODE) {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // 权限授予成功
                 Toast.makeText(this, "存储权限已授予", Toast.LENGTH_SHORT).show()
             } else {
-                // 权限被拒绝
                 Toast.makeText(this, "存储权限被拒绝", Toast.LENGTH_SHORT).show()
             }
         }

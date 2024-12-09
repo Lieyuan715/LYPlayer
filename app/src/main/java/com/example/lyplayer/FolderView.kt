@@ -16,9 +16,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.documentfile.provider.DocumentFile
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
@@ -27,11 +25,53 @@ import androidx.compose.ui.unit.Dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import android.util.LruCache
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 
+
+// 文件缓存管理对象
+object FileCache {
+    // 缓存视频的第一帧，最多缓存1000个
+    private val frameCache = LruCache<String, Bitmap>(1000)
+    private val sizeCache = LruCache<String, String>(1000)  // 缓存文件大小
+    private val dateCache = LruCache<String, String>(1000)  // 缓存文件修改时间
+
+    // 缓存视频的第一帧
+    fun getFrame(videoUri: String): Bitmap? = frameCache.get(videoUri)
+
+    fun putFrame(videoUri: String, frame: Bitmap) {
+        frameCache.put(videoUri, frame)
+    }
+
+    // 缓存文件大小
+    fun getSize(fileUri: String): String? = sizeCache.get(fileUri)
+
+    fun putSize(fileUri: String, size: String) {
+        sizeCache.put(fileUri, size)
+    }
+
+    // 缓存文件修改时间
+    fun getDate(fileUri: String): String? = dateCache.get(fileUri)
+
+    fun putDate(fileUri: String, date: String) {
+        dateCache.put(fileUri, date)
+    }
+
+    // 清除所有缓存
+    fun clear() {
+        frameCache.evictAll()
+        sizeCache.evictAll()
+        dateCache.evictAll()
+    }
+}
+
+// 排序选项
 enum class SortOption {
     NAME, DATE, SIZE, TYPE
 }
 
+// 文件夹视图
 @Composable
 fun FolderView(
     selectedFolderUri: Uri,
@@ -41,7 +81,6 @@ fun FolderView(
 ) {
     val context = LocalContext.current
     val screenHeight = LocalConfiguration.current.screenHeightDp
-    val screenWidth = LocalConfiguration.current.screenWidthDp
     val containerHeight = (screenHeight / 10).dp  // 每个容器的高度为屏幕高度的十分之一
 
     // 用来管理当前文件夹路径
@@ -51,6 +90,7 @@ fun FolderView(
     // 更新 currentFolderUri，当 selectedFolderUri 改变时同步更新
     LaunchedEffect(selectedFolderUri) {
         currentFolderUri = selectedFolderUri
+        folderHistory = listOf(selectedFolderUri) // 每次选择新文件夹时重置历史记录，只保留当前文件夹
     }
 
     // 确保返回时 currentFolderUri 和 folderHistory 同步
@@ -67,28 +107,14 @@ fun FolderView(
     var isPlaying by remember { mutableStateOf(false) }
     var selectedVideoUri by remember { mutableStateOf<Uri?>(null) }
 
+    // 排序文件夹内的文件
     val folderItems = currentFolder?.listFiles()?.sortedWith { file1, file2 ->
         when (sortOption) {
-            SortOption.NAME -> {
-                // 提取文件名并比较
-                val name1 = file1.name ?: ""
-                val name2 = file2.name ?: ""
-                name1.compareTo(name2)
-            }
-            SortOption.DATE -> {
-                // 比较修改时间
-                file1.lastModified().compareTo(file2.lastModified())
-            }
-            SortOption.SIZE -> {
-                // 比较文件大小
-                file1.length().compareTo(file2.length())
-            }
-            SortOption.TYPE -> {
-                // 提取并比较文件类型（后缀名）
-                val type1 = file1.name?.substringAfterLast('.', "") ?: ""
-                val type2 = file2.name?.substringAfterLast('.', "") ?: ""
-                type1.compareTo(type2)
-            }
+            SortOption.NAME -> file1.name?.compareTo(file2.name ?: "") ?: 0
+            SortOption.DATE -> file1.lastModified().compareTo(file2.lastModified())
+            SortOption.SIZE -> file1.length().compareTo(file2.length())
+            SortOption.TYPE -> file1.name?.substringAfterLast('.', "")
+                ?.compareTo(file2.name?.substringAfterLast('.', "") ?: "") ?: 0
         }
     } ?: emptyList()
 
@@ -104,11 +130,13 @@ fun FolderView(
             onPlaybackStateChanged = {}
         )
     } else {
+        // 显示文件夹内容列表
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
+            // 显示文件夹的标题和返回按钮
             item {
                 Row(
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -128,33 +156,25 @@ fun FolderView(
                             modifier = Modifier
                                 .padding(8.dp)
                                 .clickable {
-                                    folderHistory = folderHistory.dropLast(1)
+                                    folderHistory = folderHistory.dropLast(1)  // 返回上一级文件夹
                                 }
                         )
                     }
                 }
             }
 
+            // 分隔线
             item {
                 Divider(thickness = 1.dp)
             }
 
+            // 显示文件夹或文件项
             items(folderItems) { file ->
+                // 获取文件的修改日期
                 val fileDate = getFileDate(file)
 
-                // 获取文件或文件夹的大小，如果是文件夹则计算总大小
-                val rawFileSize = if (file.isDirectory) {
-                    // 获取文件夹大小，返回 Long 类型
-                    getFolderSize(file)
-                } else {
-                    // 获取文件大小，返回 Long 类型
-                    getFileSize(file)
-                }
-
-                // 将 Long 类型的文件大小转换为 String 类型
-                val formattedFileSize = formatSize(rawFileSize)  // 格式化为可读的文件大小字符串
-
                 if (file.isDirectory) {
+                    // 如果是文件夹，显示文件夹项，大小不计算
                     FolderItemWithIcon(
                         name = file.name ?: "未知文件夹",
                         isFolder = true,
@@ -166,15 +186,16 @@ fun FolderView(
                             )
                         },
                         onClick = {
+                            // 进入文件夹时将当前文件夹的 URI 添加到历史记录
                             folderHistory = folderHistory + file.uri
                         },
                         containerHeight = containerHeight,
-                        fileDate = fileDate,
-                        fileSize = formattedFileSize  // 传递格式化后的文件大小
+                        fileDate = fileDate
                     )
                 } else {
                     val fileExtension = file.name?.substringAfterLast('.', "")?.lowercase() ?: ""
                     if (fileExtension in listOf("mp4", "avi", "mkv", "mov", "flv", "webm", "wmv", "mpeg", "mpg")) {
+                        // 如果是视频文件，显示视频项
                         VideoItemWithFirstFrame(
                             name = file.name ?: "未知文件",
                             videoUri = file.uri,
@@ -184,18 +205,16 @@ fun FolderView(
                                 onVideoClicked(file.uri)
                             },
                             containerHeight = containerHeight,
-                            fileDate = fileDate,
-                            fileSize = formattedFileSize  // 传递格式化后的文件大小
+                            fileDate = fileDate
                         )
                     }
                 }
             }
-
-
         }
     }
 }
 
+// 文件夹项组件
 @Composable
 fun FolderItemWithIcon(
     name: String,
@@ -203,67 +222,49 @@ fun FolderItemWithIcon(
     icon: @Composable () -> Unit,
     onClick: () -> Unit,
     containerHeight: Dp,
-    fileDate: String? = null,
-    fileSize: String? = null
+    fileDate: String? = null
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(containerHeight)  // 设置固定高度
-            .padding(8.dp)
-            .clickable(onClick = onClick),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(40.dp)  // 正方形图标的尺寸
-                .padding(end = 8.dp)  // 图标和标题之间的间隔
-        ) {
-            icon()  // 渲染图标
+    var fileDateState by remember { mutableStateOf(fileDate) }
+
+    val context = LocalContext.current
+    val fileUri = remember { Uri.parse(name) }
+
+    // 使用 LaunchedEffect 来异步加载文件的大小和日期
+    LaunchedEffect(fileUri) {
+        if (fileDateState == null) {
+            fileDateState = FileCache.getDate(fileUri.toString()) ?: getFileDateFromUri(context, fileUri)
+            fileDateState?.let { FileCache.putDate(fileUri.toString(), it) }
         }
+    }
 
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyLarge,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis  // 超出部分显示省略号
-            )
-
-            // 如果有文件日期和文件大小
-            if (fileDate != null || fileSize != null) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (fileDate != null) {
-                        Text(
-                            text = fileDate,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-
-                    // 如果有文件日期，添加 '-'
-                    if (fileDate != null && fileSize != null) {
-                        Spacer(modifier = Modifier.width(4.dp))  // 添加间距
-                        Text(
-                            text = "-",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))  // 添加间距
-                    }
-
-                    if (fileSize != null) {
-                        Text(
-                            text = fileSize,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+    Column(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .fillMaxWidth()
+            .height(containerHeight)
+            .padding(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(48.dp)) {
+                icon()
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.SpaceBetween) {
+                    fileDateState?.let {
+                        Text(text = it, style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
-
-            Divider(modifier = Modifier.padding(top = 4.dp))  // 下划线
         }
+        Divider(modifier = Modifier.padding(top = 1.dp), thickness = 1.dp)
     }
 }
 
@@ -272,121 +273,159 @@ fun VideoItemWithFirstFrame(
     name: String,
     videoUri: Uri,
     onClick: () -> Unit,
-    containerHeight: Dp,  // 固定容器的高度
-    fileDate: String? = null,  // 新增：文件日期
-    fileSize: String? = null   // 新增：文件大小
+    containerHeight: Dp,
+    fileDate: String? = null,
+    fileSize: String? = null
 ) {
-    var videoThumbnail by remember { mutableStateOf<ImageBitmap?>(null) }
-    var errorMessage by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
+    // 缓存第一帧、文件大小和日期
+    var firstFrame by remember(videoUri) { mutableStateOf(FileCache.getFrame(videoUri.toString())) }
+    var fileDateState by remember { mutableStateOf(fileDate) }
+    var fileSizeState by remember { mutableStateOf(fileSize) }
+    var fileExtension by remember { mutableStateOf("") } // 新增：用于存储文件扩展名
 
-    // 异步加载视频的第一帧
-    LaunchedEffect(videoUri) {
-        try {
-            // 异步加载视频的第一帧
-            videoThumbnail = withContext(Dispatchers.IO) {
-                getVideoFirstFrame(context = context, videoUri = videoUri)?.asImageBitmap() // 转换为ImageBitmap
+    val context = LocalContext.current
+    val videoUriStr = videoUri.toString()
+
+    // 使用 LaunchedEffect 来加载视频的第一帧
+    LaunchedEffect(videoUriStr) {
+        if (firstFrame == null) {
+            firstFrame = getFirstFrameOfVideo(context, videoUri)
+            firstFrame?.let {
+                FileCache.putFrame(videoUriStr, it)
             }
-        } catch (e: Exception) {
-            // 捕获异常，显示错误消息
-            errorMessage = "加载缩略图失败: ${e.message}"
         }
+
+        if (fileSizeState == null) {
+            fileSizeState = FileCache.getSize(videoUriStr) ?: formatSize(getFileSizeFromUri(context, videoUri))
+            fileSizeState?.let { FileCache.putSize(videoUriStr, it) }
+        }
+
+        if (fileDateState == null) {
+            fileDateState = FileCache.getDate(videoUriStr) ?: getFileDateFromUri(context, videoUri)
+            fileDateState?.let { FileCache.putDate(videoUriStr, it) }
+        }
+
+        val extension = name.substringAfterLast('.', "").lowercase()
+        fileExtension = extension
     }
 
-    FolderItemWithIcon(
-        name = name,
-        isFolder = false,
-        icon = {
-            // 如果获取到视频的缩略图，显示它
-            videoThumbnail?.let {
+    Column(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .fillMaxWidth()
+            .height(containerHeight)
+            .padding(8.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            firstFrame?.let {
                 Image(
-                    painter = BitmapPainter(it),
-                    contentDescription = "视频缩略图",
+                    bitmap = it.asImageBitmap(),
+                    contentDescription = "视频封面",
                     modifier = Modifier
-                        .fillMaxWidth()  // 宽度填满
-                        .aspectRatio(1f)  // 强制宽高比为1，实现正方形
-                        .padding(1.dp),  // 可选：添加一些边距
+                        .size(48.dp)  // 设置为正方形
+                        .padding(2.dp)
+                        .clip(RoundedCornerShape(8.dp)),  // 圆角（可选）
                     contentScale = ContentScale.Crop
                 )
             } ?: run {
-                // 如果没有获取到视频缩略图，则显示默认占位图
+                // 如果没有解析到第一帧，则显示占位图
                 Image(
-                    painter = painterResource(id = R.drawable.ic_video_placeholder),  // 使用XML矢量图作为占位图
-                    contentDescription = "默认缩略图",
+                    painter = painterResource(id = R.drawable.ic_video_placeholder),
+                    contentDescription = "视频占位图",
                     modifier = Modifier
-                        .fillMaxWidth()  // 宽度填满
-                        .aspectRatio(1f)  // 强制宽高比为1，实现正方形
-                        .padding(1.dp),  // 可选：添加一些边距
+                        .size(48.dp)
+                        .padding(2.dp),
                     contentScale = ContentScale.Crop
                 )
             }
-        },
-        onClick = onClick,
-        containerHeight = containerHeight,
-        fileDate = fileDate,
-        fileSize = fileSize
-    )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
 
-    // 如果有错误消息，显示错误提示
-    errorMessage?.let {
-        Text(
-            text = it,
-            color = MaterialTheme.colorScheme.error,
-            modifier = Modifier.padding(8.dp)
-        )
+                Row(horizontalArrangement = Arrangement.SpaceBetween) {
+                    fileDateState?.let {
+                        Text(text = it, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(text = " - ", style = MaterialTheme.typography.bodySmall)
+                    fileSizeState?.let {
+                        Text(text = it, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(text = " - ", style = MaterialTheme.typography.bodySmall)
+                    Text(text = fileExtension.uppercase(), style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        Divider(modifier = Modifier.padding(top = 1.dp), thickness = 1.dp)
     }
 }
 
-fun getFileDate(file: DocumentFile): String {
-    val lastModified = file.lastModified()
-    val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())  // 修改为只显示日期
-    return date.format(java.util.Date(lastModified))
+
+// 格式化大小为可读字符串
+private fun formatSize(size: Long): String {
+    return when {
+        size < 1024 -> "$size B"
+        size < 1048576 -> String.format("%.2f KB", size / 1024.0)
+        size < 1073741824 -> String.format("%.2f MB", size / 1048576.0)
+        else -> String.format("%.2f GB", size / 1073741824.0)
+    }
 }
 
-fun getFolderSize(folder: DocumentFile): Long {
-    var totalSize: Long = 0L  // 显式声明为 Long 类型
+// 获取文件的修改时间
+private fun getFileDate(file: DocumentFile): String? {
+    return file.lastModified()?.let { formatDate(it) }
+}
 
-    folder.listFiles()?.forEach { file ->
-        totalSize += if (file.isDirectory) {
-            // 如果是文件夹，递归计算文件夹大小
-            getFolderSize(file)
-        } else {
-            // 如果是文件，直接加上文件大小
-            file.length()  // file.length() 返回 Long 类型
+// 格式化日期
+private fun formatDate(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+    return sdf.format(java.util.Date(timestamp))
+}
+
+// 异步获取文件的大小
+private suspend fun getFileSizeFromUri(context: Context, uri: Uri): Long {
+    return withContext(Dispatchers.IO) {
+        try {
+            context.contentResolver.openFileDescriptor(uri, "r")?.statSize ?: 0
+        } catch (e: IOException) {
+            0L
         }
     }
-
-    return totalSize  // 返回 Long 类型
 }
 
-fun getFileSize(file: DocumentFile): Long {
-    return file.length()  // 返回 Long 类型
-}
-
-
-fun formatSize(size: Long): String {
-    return when {
-        size >= 1e9 -> "%.2f GB".format(size / 1e9)
-        size >= 1e6 -> "%.2f MB".format(size / 1e6)
-        size >= 1e3 -> "%.2f KB".format(size / 1e3)
-        else -> "$size B"
+// 异步获取文件的修改日期
+private suspend fun getFileDateFromUri(context: Context, uri: Uri): String? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val cursor = context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATE_MODIFIED), null, null, null)
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val timestamp = it.getLong(it.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DATE_MODIFIED))
+                    formatDate(timestamp * 1000)  // Unix 时间戳是秒，转换为毫秒
+                } else {
+                    null
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 }
 
-// 提取视频的第一帧
-fun getVideoFirstFrame(context: Context, videoUri: Uri): Bitmap? {
-    val retriever = MediaMetadataRetriever()
-    var bitmap: Bitmap? = null
-    try {
-        retriever.setDataSource(context, videoUri)  // 使用 Context 和 Uri 设置数据源
-        bitmap = retriever.getFrameAtTime(0)
-    } catch (e: IllegalArgumentException) {
-        e.printStackTrace()
-    } catch (e: IOException) {
-        e.printStackTrace()
-    } finally {
-        retriever.release()
+// 异步获取视频的第一帧
+private suspend fun getFirstFrameOfVideo(context: Context, videoUri: Uri): Bitmap? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(context, videoUri)
+            retriever.frameAtTime
+        } catch (e: Exception) {
+            null
+        }
     }
-
-    return bitmap
 }
