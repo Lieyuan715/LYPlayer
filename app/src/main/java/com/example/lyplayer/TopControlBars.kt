@@ -62,7 +62,7 @@ fun TopControlBar(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White,
-                    modifier = Modifier.size(if (isLandscape) (screenHeight / 13).dp else (screenHeight * 0.04f).dp)
+                    modifier = Modifier.size(if (isLandscape) (screenHeight / 13).dp else (screenHeight * 0.04).dp)
                 )
             }
 
@@ -89,14 +89,14 @@ fun TopControlBar(
                 IconButton(
                     onClick = onToggleRightToolbar,
                     modifier = Modifier
-                        .size(if (isLandscape) (screenHeight / 6).dp else (screenHeight * 0.08f).dp)
+                        .size(if (isLandscape) (screenHeight / 6).dp else (screenHeight * 0.08).dp)
                         .padding(end = if (isLandscape) (screenWidth / 128).dp else (screenWidth / 64).dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "More",
                         tint = Color.White,
-                        modifier = Modifier.size(if (isLandscape) (screenHeight / 13).dp else (screenHeight * 0.04f).dp)
+                        modifier = Modifier.size(if (isLandscape) (screenHeight / 13).dp else (screenHeight * 0.04).dp)
                     )
                 }
             }
