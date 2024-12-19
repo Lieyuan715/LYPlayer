@@ -27,7 +27,6 @@ import kotlinx.coroutines.delay
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.window.Popup
@@ -160,10 +159,11 @@ fun BottomControlBar(
                     .height(if (isLandscape) (screenHeight * 0.1).dp else (screenHeight * 0.06).dp) // 进度条高度调整
                     .pointerInput(Unit) {
                         detectTapGestures(
-                            onPress = { offset ->
-                                val clickedPercentage = (offset.x / size.width).coerceIn(0f, 1f)
-                                draggingProgress = clickedPercentage
-                                onProgressChanged(draggingProgress, true)
+                            onTap = { offset ->
+                                isUserDragging = false // 点击时明确不是拖动
+                                val clickedProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                                draggingProgress = clickedProgress
+                                onProgressChanged(clickedProgress, false) // 点击跳转
                             }
                         )
                     }

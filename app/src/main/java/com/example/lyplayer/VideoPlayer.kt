@@ -92,6 +92,7 @@ fun VideoPlayer(
     var speedIndicatorVisible by remember { mutableStateOf(false) }// 用于控制是否显示速度提示。
     var currentSpeed by remember { mutableStateOf(1.0f) } // 记录当前倍速
     var isDragging by remember { mutableStateOf(false) } // 标记是否正在拖动
+    var isUserDragging by remember { mutableStateOf(false) } // 是否正在拖动进度条
     var draggingProgress by remember { mutableFloatStateOf(0f) } // 拖动中的进度
     var wasControlsVisible by remember { mutableStateOf(false) } // 标记拖动开始时工具栏是否显示
     var isAdjustingBrightness by remember { mutableStateOf(false) } // 正在调节亮度
@@ -281,6 +282,7 @@ fun VideoPlayer(
                                         isAdjustingVolume = true // 右侧区域，优先垂直滑动
                                     } else {
                                         isDragging = true // 其他区域水平滑动，触发播放进度调整
+                                        isUserDragging = true // 拖动开始，标记为拖动状态
                                     }
                                 }
                             }
@@ -296,7 +298,7 @@ fun VideoPlayer(
                             isAdjustingBrightness = false
                             isAdjustingVolume = false
                             isDragging = false
-
+                            isUserDragging = false
                             if (isLongPressing) {
                                 isLongPressing = false
                                 speedIndicatorVisible = false
