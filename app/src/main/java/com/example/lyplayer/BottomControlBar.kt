@@ -1,3 +1,7 @@
+/* 
+ * 占位符注释 - BottomControlBar.kt
+ * 此文件包含底部控制栏相关功能
+ */
 package com.example.lyplayer
 
 import android.content.pm.ActivityInfo

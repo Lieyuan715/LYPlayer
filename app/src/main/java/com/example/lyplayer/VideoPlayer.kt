@@ -1,3 +1,7 @@
+/* 
+ * 占位符注释 - VideoPlayer.kt
+ * 此文件包含视频播放器相关功能
+ */
 package com.example.lyplayer
 
 import android.app.Activity

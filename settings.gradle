@@ -1,3 +1,7 @@
+/*
+ * 占位符注释 - settings.gradle
+ * 此文件为Gradle设置脚本，定义项目结构和仓库配置
+ */
 pluginManagement {
     repositories {
         google {

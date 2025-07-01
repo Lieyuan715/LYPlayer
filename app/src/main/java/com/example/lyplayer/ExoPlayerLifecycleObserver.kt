@@ -1,3 +1,7 @@
+/* 
+ * 占位符注释 - ExoPlayerLifecycleObserver.kt
+ * 此文件包含ExoPlayer生命周期观察者相关功能
+ */
 package com.example.lyplayer
 
 import androidx.lifecycle.DefaultLifecycleObserver

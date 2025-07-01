@@ -1,3 +1,7 @@
+/*
+ * 占位符注释 - build.gradle (应用模块)
+ * 此文件为应用模块的构建脚本，包含应用特定的配置和依赖项
+ */
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)

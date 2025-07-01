@@ -1,3 +1,7 @@
+/* 
+ * 占位符注释 - CustomTopBar.kt
+ * 此文件包含自定义顶部栏相关功能
+ */
 package com.example.lyplayer
 
 import androidx.compose.foundation.background

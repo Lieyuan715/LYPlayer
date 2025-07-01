@@ -1,3 +1,7 @@
+/* 
+ * 占位符注释 - FolderView.kt
+ * 此文件包含文件夹视图相关功能
+ */
 package com.example.lyplayer
 
 import android.content.Context

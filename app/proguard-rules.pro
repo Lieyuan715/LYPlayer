@@ -1,3 +1,6 @@
+# 占位符注释 - proguard-rules.pro
+# 此文件包含ProGuard混淆规则配置
+
 # Add project specific ProGuard rules here.
 # You can control the set of applied configuration files using the
 # proguardFiles setting in build.gradle.

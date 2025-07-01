@@ -1,3 +1,7 @@
+/* 
+ * 占位符注释 - MainActivity.kt
+ * 此文件为LYPlayer应用的主Activity
+ */
 package com.example.lyplayer
 
 import android.Manifest

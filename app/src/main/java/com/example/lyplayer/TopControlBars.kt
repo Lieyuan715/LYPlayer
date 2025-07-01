@@ -1,3 +1,7 @@
+/* 
+ * 占位符注释 - TopControlBars.kt
+ * 此文件包含顶部控制栏相关功能
+ */
 package com.example.lyplayer
 
 import androidx.compose.foundation.background
